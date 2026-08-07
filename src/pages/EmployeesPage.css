@@ -410,27 +410,44 @@
     vertical-align: middle;
 }
 
-.employee-cell {
-    max-width: 240px;
-}
-
-.employee-cell--name {
-    max-width: 380px;
-}
-
-.employee-cell--position,
-.employee-cell--degree,
-.employee-cell--researcherIdWos,
-.employee-cell--scopusAuthorId {
-    max-width: 320px;
-}
-
 .employee-cell-ellipsis {
     display: block;
-    width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    white-space: normal;
+    overflow-wrap: break-word;
+    word-break: break-word;
+}
+
+.employee-th--name,
+.employee-cell--name {
+    width: 220px;
+}
+
+.employee-th--position,
+.employee-cell--position,
+.employee-th--degree,
+.employee-cell--degree {
+    width: 150px;
+}
+
+.employee-th--scopusAuthorId,
+.employee-cell--scopusAuthorId,
+.employee-th--researcherIdWos,
+.employee-cell--researcherIdWos {
+    width: 130px;
+}
+
+.employee-th--hIndexScopus,
+.employee-cell--hIndexScopus,
+.employee-th--hIndex,
+.employee-cell--hIndex,
+.employee-th--age,
+.employee-cell--age {
+    width: 80px;
+}
+
+.employee-th--region,
+.employee-cell--region {
+    width: 120px;
 }
 
 .employee-cell-link {

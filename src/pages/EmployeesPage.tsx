@@ -5,19 +5,21 @@ import { useRegionContext } from '../context/RegionContext';
 import type { RegionId } from '../context/RegionContext'; 
 import './EmployeesPage.css';
 import { useTranslation } from 'react-i18next';
-import { mapRegionToId } from '../api/services';
+import { mapRegionToId, resolveRegionLabel } from '../api/services';
 import type { BackendEmployee } from '../api/types';
 import { useEmployeesData } from '../hooks/useEmployeesData';
 import PageLoader from '../components/PageLoader/PageLoader';
 
 // --- 1. Типы данных и мок-данные ---
-export type AffiliateType = 'staff' | 'external' | 'all'; // Штатный/Сторонний/Все
-export type GenderType = 'male' | 'female' | 'all';
-export type CitizenshipType = 'resident' | 'non-resident' | 'all';
+// Значения этих полей приходят с backend как произвольные строки (реальные данные из БД),
+// поэтому типы — строки, а не фиксированные наборы вариантов.
+export type AffiliateType = string;
+export type GenderType = string;
+export type CitizenshipType = string;
 export type DegreeType = string;
 export type HIndexGroup = '0-1' | '2-5' | '6-10' | '10+' | 'all';
-export type MRNTIType = '11.00.00' | '27.00.00' | '55.00.00' | 'all'; // Примерные коды
-export type ClassifierType = 'economic' | 'social' | 'technical' | 'all'; // Примерные категории
+export type MRNTIType = string;
+export type ClassifierType = string;
 
 interface Employee {
   id: string;
@@ -25,6 +27,7 @@ interface Employee {
   position: string;
   department: string;
   regionId: RegionId;
+  regionLabel?: string;
   hireDate: string;
   email: string;
   birthYear: number;
@@ -127,6 +130,8 @@ const createInitialFilters = (): EmployeeFilters => ({
   regionId: 'all',
 });
 
+const asStringMetric = (value: unknown, fallback = 'all'): string => (typeof value === 'string' && value ? value : fallback);
+
 const toEmployee = (item: BackendEmployee): Employee => {
   const metrics = item.metrics ?? {};
   const hIndexRaw = metrics.hIndex;
@@ -139,6 +144,9 @@ const toEmployee = (item: BackendEmployee): Employee => {
   const hIndexScopus = typeof hIndexScopusRaw === 'number'
     ? hIndexScopusRaw
     : Number(hIndexScopusRaw ?? hIndex);
+  const ageRaw = metrics.age;
+  const age = typeof ageRaw === 'number' ? ageRaw : Number(ageRaw ?? 0);
+  const birthYear = age > 0 ? currentYear - age : 1990;
 
   return {
     id: item.id,
@@ -146,18 +154,19 @@ const toEmployee = (item: BackendEmployee): Employee => {
     position: item.position,
     department: item.department || '—',
     regionId: mapRegionToId(item.region) as RegionId,
+    regionLabel: resolveRegionLabel(item.region),
     hireDate: new Date().toISOString().slice(0, 10),
     email: item.email,
-    birthYear: 1990,
-    affiliateType: 'staff',
-    gender: 'male',
-    degree: 'none',
-    citizenship: 'resident',
-    projectRole: 'Исполнитель',
+    birthYear,
+    affiliateType: asStringMetric(metrics.affiliateType),
+    gender: asStringMetric(metrics.gender),
+    degree: asStringMetric(metrics.academicDegree, 'none'),
+    citizenship: asStringMetric(metrics.citizenship),
+    projectRole: asStringMetric(metrics.projectRole),
     hIndex: Number.isFinite(hIndex) ? hIndex : 0,
     hIndexScopus: Number.isFinite(hIndexScopus) ? hIndexScopus : Number.isFinite(hIndex) ? hIndex : 0,
-    mrntiCode: '11.00.00',
-    classifier: 'technical',
+    mrntiCode: asStringMetric(metrics.mrnti),
+    classifier: asStringMetric(metrics.classifier),
     scopusAuthorId: scopusAuthorId || '-',
     researcherIdWos: researcherIdWos || '-',
   };
@@ -182,7 +191,7 @@ const EmployeesPage: React.FC = () => {
   const regionNameById = useMemo(() => {
     const map: Record<string, string> = {};
     regions.forEach((region) => {
-      map[region.id] = region.shortName ?? region.name;
+      map[region.id] = region.name;
     });
     return map;
   }, [regions]);
@@ -462,7 +471,9 @@ const EmployeesPage: React.FC = () => {
       case 'hIndex':
         return employee.hIndex;
       case 'region':
-        return renderTruncatedText(regionNameById[employee.regionId] ?? t('not_available_short'));
+        return renderTruncatedText(
+          regionNameById[employee.regionId] ?? employee.regionLabel ?? t('not_available_short'),
+        );
       case 'age':
         return currentYear - employee.birthYear;
       default:
@@ -471,57 +482,14 @@ const EmployeesPage: React.FC = () => {
   };
 
 
-  // --- ЛОГИКА ФИЛЬТРАЦИИ И СОРТИРОВКИ ---
+  // --- ЛОГИКА СОРТИРОВКИ ---
+  // Фильтрация (регион, подразделение, пол, гражданство, роль, степень, МРНТИ, возраст и т.д.)
+  // выполняется на backend через appliedFilters — см. useEmployeesData. Здесь она не дублируется,
+  // чтобы не расходиться с backend-данными.
   const filteredEmployees = useMemo(() => {
     let list = employeesData;
-    const { department, minAge, maxAge, affiliateType, gender, citizenship, projectRole } = appliedFilters;
-    
-    // 3. Фильтрация по подразделению
-    if (department !== 'all') {
-      list = list.filter((e) => e.department === department);
-    }
 
-
-    if (appliedFilters.mrnti !== 'all') {
-        // ✅ ИСПРАВЛЕНО
-      list = list.filter((emp) => emp.mrntiCode === appliedFilters.mrnti); 
-    }
-    
-
-
-    if (appliedFilters.regionId !== 'all') {
-        // ✅ ИСПРАВЛЕНО
-      list = list.filter((emp) => emp.regionId === appliedFilters.regionId);
-    }
-    
-    // 4. Фильтрация по аффилированности
-    if (affiliateType !== 'all') {
-        list = list.filter(e => e.affiliateType === affiliateType);
-    }
-    
-    // 5. Фильтрация по полу
-    if (gender !== 'all') {
-        list = list.filter(e => e.gender === gender);
-    }
-    
-    // 7. Фильтрация по гражданству
-    if (citizenship !== 'all') {
-        list = list.filter(e => e.citizenship === citizenship);
-    }
-    
-    // 8. Фильтрация по роли в проекте
-    if (projectRole !== 'all') {
-        list = list.filter(e => e.projectRole === projectRole);
-    }
-
-    // 9. Фильтрация по возрасту
-    const currentYear = new Date().getFullYear();
-    list = list.filter(e => {
-        const age = currentYear - e.birthYear;
-        return age >= minAge && age <= maxAge;
-    });
-
-    // 10. Сортировка
+    // Сортировка
     if (sort.key && sort.direction) {
       list = [...list].sort((a, b) => {
         const aValue = a[sort.key as keyof Employee];
@@ -543,7 +511,7 @@ const EmployeesPage: React.FC = () => {
     }
 
     return list;
-  }, [appliedFilters, sort, employeesData]);
+  }, [sort, employeesData]);
 
   // Заглушка для действий с сотрудниками
   const handleAction = () => {
@@ -908,7 +876,7 @@ const EmployeesPage: React.FC = () => {
                             onClick={() =>
                               handleSortChange((isAgeColumn ? 'age' : column.sortKey) as keyof Employee | 'age')
                             }
-                            className={headerState}
+                            className={`employee-th employee-th--${column.key}${headerState ? ` ${headerState}` : ''}`}
                           >
                             {column.label}
                             <ArrowUpDown size={14} />
@@ -917,7 +885,9 @@ const EmployeesPage: React.FC = () => {
                       }
 
                       return (
-                        <th key={column.key}>{column.label}</th>
+                        <th key={column.key} className={`employee-th employee-th--${column.key}`}>
+                          {column.label}
+                        </th>
                       );
                     })}
                   </tr>

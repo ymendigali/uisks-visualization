@@ -39,14 +39,16 @@ const regionByNormalizedName = new Map(
 );
 
 const partialRegionAliases: Array<[string, string]> = [
-  ['астана', 'astana-city'],
+  ['астана', 'astana'],
   ['алматы', 'almaty-city'],
-  ['шымкент', 'shymkent-city'],
+  ['шымкент', 'shymkent'],
   ['западно-казахстан', 'west-kazakhstan'],
   ['восточно-казахстан', 'east-kazakhstan'],
   ['северо-казахстан', 'north-kazakhstan'],
   ['алматинская', 'almaty'],
   ['жетысуская', 'jetisu'],
+  ['мангыстауская', 'mangystau'],
+  ['мангистауская', 'mangystau'],
   ['акмолинская', 'akmola'],
   ['атырауская', 'atyrau'],
   ['карагандинская', 'karaganda'],
@@ -58,11 +60,14 @@ const partialRegionAliases: Array<[string, string]> = [
   ['жамбылская', 'zhambyl'],
   ['костанайская', 'kostanay'],
   ['актюбинская', 'aktobe'],
-  ['мангистауская', 'mangystau'],
 ];
 
-export const mapRegionToId = (regionName: string): string => {
+const matchRegionId = (regionName: string): string | undefined => {
   const normalized = normalize(regionName);
+  if (!normalized) {
+    return undefined;
+  }
+
   const exact = regionByNormalizedName.get(normalized);
   if (exact) {
     return exact;
@@ -74,7 +79,32 @@ export const mapRegionToId = (regionName: string): string => {
     }
   }
 
-  return 'national';
+  return undefined;
+};
+
+export const mapRegionToId = (regionName: string): string => matchRegionId(regionName) ?? 'national';
+
+/**
+ * Returns the full, human-readable region label for a raw backend region string:
+ * the matched Kazakhstan region's full name, the raw value itself for recognized
+ * foreign locations, or undefined when the value carries no real information.
+ */
+export const resolveRegionLabel = (regionName: string): string | undefined => {
+  const matchedId = matchRegionId(regionName);
+  if (matchedId) {
+    const region = regionsData.find((item) => item.id === matchedId);
+    if (region) {
+      return region.name;
+    }
+  }
+
+  const trimmed = regionName.trim();
+  const unknownValues = new Set(['', '-', '.', 'не указано', 'не указан', 'нигде', 'другое']);
+  if (!trimmed || unknownValues.has(normalize(trimmed))) {
+    return undefined;
+  }
+
+  return trimmed;
 };
 
 export const authApi = {
