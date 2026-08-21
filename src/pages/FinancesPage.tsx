@@ -21,7 +21,7 @@ import './FinancesPage.css';
 import { useTranslation } from 'react-i18next';
 import { useFinanceSummary } from '../hooks/useFinanceSummary';
 import { financesApi } from '../api/services';
-import type { FinanceFilterMeta, FinanceFilterOptions } from '../api/types';
+import type { FinanceFilterMeta, FinanceFilterOptions, FinanceSummary } from '../api/types';
 import PageLoader from '../components/PageLoader/PageLoader';
 
 ChartJS.register(
@@ -34,8 +34,8 @@ ChartJS.register(
   LineController,
 );
 
-type FinancingType = 'gf' | 'pcf' | 'commercial';
-type CofinancingType = 'contract' | 'actual';
+type FinancingType = string;
+type CofinancingType = 'all' | 'contract' | 'actual';
 type ExpenseCategory = 'salary' | 'travel' | 'support' | 'materials' | 'rent' | 'protocol';
 type PriorityDirection = 'all' | 'digital' | 'education' | 'biotech' | 'energy';
 type CompetitionName = 'all' | 'innovation' | 'grant2025' | 'pilot';
@@ -73,11 +73,13 @@ const getFinancesOptions = (t: (key: string) => string) => ({
     { value: 'irn-204', label: 'IRN 204' },
   ],
   financingType: [
+    { value: 'all', label: t('finances_option_all_financing_types') },
     { value: 'gf', label: t('finances_financing_gf') },
     { value: 'pcf', label: t('finances_financing_pcf') },
     { value: 'commercial', label: t('finances_financing_commercial') },
   ],
   cofinancing: [
+    { value: 'all', label: t('finances_option_all_cofinancing') },
     { value: 'contract', label: t('finances_cofinancing_contract') },
     { value: 'actual', label: t('finances_cofinancing_actual') },
   ],
@@ -138,22 +140,7 @@ const DEFAULT_CHART_FILTERS: ChartFilterState = {
 
 const COFINANCING_YEAR_LABELS = ['2020', '2021', '2022', '2023', '2024'];
 
-const EXPENSE_SHARES: Record<ExpenseCategory, number> = {
-  salary: 0.32,
-  travel: 0.08,
-  support: 0.15,
-  materials: 0.2,
-  rent: 0.1,
-  protocol: 0.15,
-};
-
 const EXPENSE_ACTIVE_COLORS = ['#2563eb', '#0ea5e9', '#14b8a6', '#f97316', '#f59e0b', '#a855f7'];
-
-const FINANCING_TYPE_SHARES: Record<FinancingType, number> = {
-  gf: 0.62,
-  pcf: 0.26,
-  commercial: 0.12,
-};
 
 const FINANCING_TYPE_COLORS = ['#1d4ed8', '#7c3aed', '#0ea5e9'];
 
@@ -161,79 +148,25 @@ const clampValue = (value: number, min: number, max: number): number => {
   return Math.min(max, Math.max(min, value));
 };
 
-const adjustFinancesByFilters = (
+const applyRealFinances = (
   baseFinances: ReturnType<typeof calculateNationalMetrics>['finances'],
-  filters: FilterState,
+  summary: FinanceSummary | null,
 ) => {
-  const typeFactors: Record<FinancingType, number> = {
-    gf: 1.08,
-    pcf: 1.14,
-    commercial: 0.92,
-  };
+  if (!summary) {
+    return baseFinances;
+  }
 
-  const budgetUsageAdjustments: Record<FinancingType, number> = {
-    gf: 1.02,
-    pcf: 1.05,
-    commercial: 0.96,
-  };
-
-  const cofinancingFactors: Record<CofinancingType, number> = {
-    contract: 1,
-    actual: 1.06,
-  };
-
-  const expenseAdjustments: Record<ExpenseCategory, { total: number; avgExpense: number; programs: number }> = {
-    salary: { total: 1.04, avgExpense: 1.12, programs: 1.02 },
-    travel: { total: 0.96, avgExpense: 0.9, programs: 0.95 },
-    support: { total: 1.02, avgExpense: 1.05, programs: 1.08 },
-    materials: { total: 1.08, avgExpense: 1.02, programs: 1.04 },
-    rent: { total: 0.94, avgExpense: 0.88, programs: 0.92 },
-    protocol: { total: 1.01, avgExpense: 1, programs: 1.06 },
-  };
-
-  const irnFactors: Record<string, number> = {
-    'irn-001': 1.06,
-    'irn-057': 1.02,
-    'irn-112': 0.97,
-    'irn-204': 1.1,
-  };
-
-  
-
-  const typeFactor = typeFactors[filters.financingType];
-  const cofinFactor = cofinancingFactors[filters.cofinancing];
-  const expenseFactor = expenseAdjustments[filters.expense];
-  const effectivePeriod = Math.round((filters.startYear + filters.endYear) / 2);
-  const periodFactor = 1 + (effectivePeriod - 2030) * 0.008;
-  const irnFactor = filters.irn === 'all' ? 1 : irnFactors[filters.irn] ?? 1;
-
-  const combinedTotalFactor = typeFactor * cofinFactor * expenseFactor.total * periodFactor * irnFactor;
-
-  const total = clampValue(Number((baseFinances.total * combinedTotalFactor).toFixed(2)), 5, baseFinances.total * 1.8);
-  const lastYearFactor = (cofinFactor + expenseFactor.programs + typeFactor) / 3;
-  const lastYear = clampValue(Number((baseFinances.lastYear * lastYearFactor * periodFactor).toFixed(2)), 3, total);
-  const avgExpense = clampValue(
-    Number((baseFinances.avgExpense * expenseFactor.avgExpense).toFixed(2)),
-    baseFinances.avgExpense * 0.75,
-    baseFinances.avgExpense * 1.35,
-  );
-  const budgetUsage = clampValue(
-    Number((baseFinances.budgetUsage * budgetUsageAdjustments[filters.financingType]).toFixed(2)),
-    45,
-    100,
-  );
-  const regionalPrograms = clampValue(
-    Number((baseFinances.regionalPrograms * expenseFactor.programs * irnFactor).toFixed(2)),
-    1,
-    baseFinances.regionalPrograms * 1.6,
-  );
+  const totalBudgetBln = Number((summary.totalBudget / 1_000_000_000).toFixed(2));
+  const totalSpentBln = Number((summary.totalSpent / 1_000_000_000).toFixed(2));
+  const budgetUsage =
+    totalBudgetBln > 0 ? Number(((totalSpentBln / totalBudgetBln) * 100).toFixed(1)) : baseFinances.budgetUsage;
 
   return {
-    total,
-    lastYear,
-    avgExpense,
+    ...baseFinances,
+    total: totalBudgetBln,
+    lastYear: totalSpentBln,
+    avgExpense: totalSpentBln,
     budgetUsage,
-    regionalPrograms,
   };
 };
 
@@ -255,8 +188,8 @@ const FinancesPage: React.FC = () => {
     irn: 'all',
     startYear: 2026,
     endYear: 2034,
-    financingType: 'gf',
-    cofinancing: 'contract',
+    financingType: 'all',
+    cofinancing: 'all',
     expense: 'salary',
     priority: 'all',
     competition: 'all',
@@ -301,8 +234,8 @@ const FinancesPage: React.FC = () => {
   const financesOptions = useMemo(
     () => ({
       irn: toOptions(apiFilterOptions?.irn, defaultFinancesOptions.irn, true),
-      financingType: toOptions(apiFilterOptions?.financingType, defaultFinancesOptions.financingType),
-      cofinancing: toOptions(apiFilterOptions?.cofinancing, defaultFinancesOptions.cofinancing),
+      financingType: toOptions(apiFilterOptions?.financingType, defaultFinancesOptions.financingType, true),
+      cofinancing: toOptions(apiFilterOptions?.cofinancing, defaultFinancesOptions.cofinancing, true),
       expense: toOptions(apiFilterOptions?.expense, defaultFinancesOptions.expense),
       priority: toOptions(apiFilterOptions?.priority, defaultFinancesOptions.priority, true),
       competition: toOptions(apiFilterOptions?.competition, defaultFinancesOptions.competition, true),
@@ -423,28 +356,19 @@ const FinancesPage: React.FC = () => {
 
   const { apiSummary, isSummaryLoading, summaryError } = useFinanceSummary(financeQuery);
 
+  const nationalFinanceQuery = useMemo(() => ({ ...financeQuery, region: 'all' }), [financeQuery]);
+  const { apiSummary: nationalApiSummary } = useFinanceSummary(nationalFinanceQuery);
+
   const nationalMetrics = useMemo(() => {
     const base = calculateNationalMetrics();
-    if (!apiSummary) {
-      return base;
-    }
+    return { ...base, finances: applyRealFinances(base.finances, nationalApiSummary) };
+  }, [nationalApiSummary]);
 
-    const totalBudgetBln = Number((apiSummary.totalBudget / 1_000_000_000).toFixed(2));
-    const totalSpentBln = Number((apiSummary.totalSpent / 1_000_000_000).toFixed(2));
-    const budgetUsage = totalBudgetBln > 0 ? Number(((totalSpentBln / totalBudgetBln) * 100).toFixed(1)) : base.finances.budgetUsage;
+  const metrics = useMemo(() => {
+    const base = selectedRegion?.stats ?? calculateNationalMetrics();
+    return { ...base, finances: applyRealFinances(base.finances, apiSummary) };
+  }, [selectedRegion, apiSummary]);
 
-    return {
-      ...base,
-      finances: {
-        ...base.finances,
-        total: totalBudgetBln,
-        lastYear: totalSpentBln,
-        avgExpense: totalSpentBln,
-        budgetUsage,
-      },
-    };
-  }, [apiSummary]);
-  const metrics = selectedRegion?.stats ?? nationalMetrics;
   const [chartFilters, setChartFilters] = useState<ChartFilterState>({
     cofinancing: [],
     expenses: [],
@@ -478,20 +402,7 @@ const FinancesPage: React.FC = () => {
     });
   }, []);
 
-  const adjustedFinances = useMemo(
-    () => adjustFinancesByFilters(metrics.finances, filters),
-    [metrics.finances, filters],
-  );
-
-  const adjustedMetrics = useMemo(
-    () => ({
-      projects: metrics.projects,
-      publications: metrics.publications,
-      people: metrics.people,
-      finances: adjustedFinances,
-    }),
-    [metrics, adjustedFinances],
-  );
+  const adjustedMetrics = metrics;
 
   const selectedCofinancingFilters = chartFilters.cofinancing;
   const activeCofinancingFilters = selectedCofinancingFilters.length
@@ -654,21 +565,22 @@ const FinancesPage: React.FC = () => {
     [currencyUnitShort],
   );
 
-  const expenseBreakdown = useMemo(
-    () =>
-      financesOptions.expense.map((option, index) => {
-        const share = EXPENSE_SHARES[option.value as ExpenseCategory];
-        const value = Number((adjustedMetrics.finances.total * share).toFixed(1));
-        return {
-          key: option.value as ExpenseCategory,
-          label: option.label,
-          value,
-          percentage: Number((share * 100).toFixed(1)),
-          color: EXPENSE_ACTIVE_COLORS[index],
-        };
-      }),
-    [adjustedMetrics.finances.total, financesOptions],
-  );
+  const expenseBreakdown = useMemo(() => {
+    const amountByCategory = new Map((apiSummary?.byCategory ?? []).map((item) => [item.category, item.amount]));
+    const totalAmount = Array.from(amountByCategory.values()).reduce((acc, amount) => acc + amount, 0);
+
+    return financesOptions.expense.map((option, index) => {
+      const amount = amountByCategory.get(option.value) ?? 0;
+      const share = totalAmount > 0 ? amount / totalAmount : 0;
+      return {
+        key: option.value as ExpenseCategory,
+        label: option.label,
+        value: Number((amount / 1_000_000_000).toFixed(1)),
+        percentage: Number((share * 100).toFixed(1)),
+        color: EXPENSE_ACTIVE_COLORS[index],
+      };
+    });
+  }, [apiSummary, financesOptions]);
 
   const selectedExpenseFilters = chartFilters.expenses;
   const activeExpenseFilters = selectedExpenseFilters.length
@@ -744,36 +656,33 @@ const FinancesPage: React.FC = () => {
     [currencyUnitShort],
   );
 
+  const realFinancingTypeOptions = useMemo(
+    () => financesOptions.financingType.filter((option) => option.value !== 'all'),
+    [financesOptions],
+  );
+
   const financingTypeBreakdown = useMemo(() => {
-    const bonus = 0.05;
-    const adjustedShares = financesOptions.financingType.map((option) => {
-      const baseShare = FINANCING_TYPE_SHARES[option.value as FinancingType];
-      if (option.value === filters.financingType) {
-        return baseShare + bonus;
-      }
-      const remainder = financesOptions.financingType.length - 1;
-      return clampValue(baseShare - bonus / Math.max(remainder, 1), 0.05, 1);
-    });
+    const countByType = new Map((apiFilterMeta?.financingType ?? []).map((item) => [item.value, item.count]));
+    const totalCount = Array.from(countByType.values()).reduce((acc, count) => acc + count, 0);
 
-    const shareSum = adjustedShares.reduce((acc: number, share: number) => acc + share, 0);
-
-    return financesOptions.financingType.map((option: { value: string; label: string }, index: number) => {
-      const share = adjustedShares[index] / shareSum;
+    return realFinancingTypeOptions.map((option, index) => {
+      const count = countByType.get(option.value) ?? 0;
+      const share = totalCount > 0 ? count / totalCount : 0;
       const value = Number((adjustedMetrics.finances.total * share).toFixed(1));
       return {
         key: option.value as FinancingType,
         label: option.label,
         value,
         percentage: Number((share * 100).toFixed(1)),
-        color: FINANCING_TYPE_COLORS[index],
+        color: FINANCING_TYPE_COLORS[index % FINANCING_TYPE_COLORS.length],
       };
     });
-  }, [adjustedMetrics.finances.total, filters.financingType, financesOptions]);
+  }, [adjustedMetrics.finances.total, apiFilterMeta, realFinancingTypeOptions]);
 
   const selectedFinancingTypeFilters = chartFilters.financingTypes;
   const activeFinancingTypeFilters = selectedFinancingTypeFilters.length
     ? selectedFinancingTypeFilters
-    : DEFAULT_CHART_FILTERS.financingTypes;
+    : realFinancingTypeOptions.map((option) => option.value);
 
   const filteredFinancingTypes = useMemo(
     () => financingTypeBreakdown.filter((item: { key: FinancingType; label: string; value: number; percentage: number; color: string }) => activeFinancingTypeFilters.includes(item.key)),
@@ -816,8 +725,8 @@ const FinancesPage: React.FC = () => {
   }, [filteredFinancingTypes, financesOptions]);
 
   const remainingFinancingTypeOptions = useMemo(
-    () => financesOptions.financingType.filter((option) => !selectedFinancingTypeFilters.includes(option.value as FinancingType)),
-    [selectedFinancingTypeFilters, financesOptions],
+    () => realFinancingTypeOptions.filter((option) => !selectedFinancingTypeFilters.includes(option.value as FinancingType)),
+    [selectedFinancingTypeFilters, realFinancingTypeOptions],
   );
 
   const financingTypeChartOptions = useMemo<ChartOptions<'doughnut'>>(

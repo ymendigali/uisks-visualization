@@ -9,8 +9,6 @@ import type { BackendProject } from '../api/types';
 import { useProjectsData } from '../hooks/useProjectsData';
 import PageLoader from '../components/PageLoader/PageLoader';
 
-type FinancingType = 'grant' | 'program' | 'contract';
-type PriorityDirection = 'health' | 'economy' | 'ecology' | 'energy' | 'transport' | 'ai';
 type ProjectStatus = 'active' | 'completed' | 'draft';
 type TrlLevel = 3 | 4 | 5 | 6 | 7 | 8 | 9;
 type DropdownFilterKey = 'irn' | 'financingType' | 'applicant' | 'customer' | 'mrnti';
@@ -21,9 +19,9 @@ interface Project {
 	title: string;
 	applicant: string;
 	supervisor: string;
-	priority: PriorityDirection;
+	priority: string;
 	contest: string;
-	financingType: FinancingType;
+	financingType: string;
 	financingTotal: number;
 	regionId: RegionId;
 	customer: string;
@@ -210,17 +208,6 @@ const toProjectStatus = (value: string): ProjectStatus => {
 const toProject = (item: BackendProject): Project => {
 	const startYear = item.startDate ? new Date(item.startDate).getFullYear() : YEAR_RANGE.min;
 	const endYear = item.endDate ? new Date(item.endDate).getFullYear() : YEAR_RANGE.max;
-	const tags = item.tags ?? [];
-
-	let financingType: FinancingType = 'grant';
-	if (tags.some((tag) => tag.toLowerCase().includes('contract'))) {
-		financingType = 'contract';
-	} else if (tags.some((tag) => tag.toLowerCase().includes('program'))) {
-		financingType = 'program';
-	}
-
-	const parsedTrlTag = tags.find((tag) => /^trl[-\s]?\d$/i.test(tag));
-	const trlValue = parsedTrlTag ? Number(parsedTrlTag.replace(/[^\d]/g, '')) : 4;
 
 	return {
 		id: item.id,
@@ -228,15 +215,15 @@ const toProject = (item: BackendProject): Project => {
 		title: item.title,
 		applicant: item.lead || '—',
 		supervisor: item.lead || '—',
-		priority: 'ai',
-		contest: 'API',
-		financingType,
+		priority: item.priority || '—',
+		contest: item.contest || '—',
+		financingType: item.financingType || '—',
 		financingTotal: item.budget,
 		regionId: mapRegionToId(item.region) as RegionId,
-		customer: '—',
-		mrnti: '—',
+		customer: item.customer || '—',
+		mrnti: item.mrnti || '—',
 		status: toProjectStatus(item.status),
-		trl: (trlValue >= 3 && trlValue <= 9 ? trlValue : 4) as TrlLevel,
+		trl: (item.trl && item.trl >= 3 && item.trl <= 9 ? item.trl : 4) as TrlLevel,
 		startYear: Number.isFinite(startYear) ? startYear : YEAR_RANGE.min,
 		endYear: Number.isFinite(endYear) ? endYear : YEAR_RANGE.max,
 	};
@@ -389,6 +376,7 @@ const ProjectsPage: React.FC = () => {
 		() => ['all', ...(projectFilters?.status.length ? projectFilters.status : Object.keys(statusLabels))],
 		[projectFilters?.status, statusLabels],
 	);
+	const hasRealTrlData = Boolean(projectFilters?.trl.length);
 	const trlOptions = useMemo<(TrlLevel | 'all')[]>(() => {
 		if (projectFilters?.trl.length) {
 			const parsed = projectFilters.trl
@@ -396,8 +384,8 @@ const ProjectsPage: React.FC = () => {
 				.filter((value) => value >= 3 && value <= 9) as TrlLevel[];
 			return ['all', ...new Set(parsed)];
 		}
-		return ['all', ...new Set(projectsData.map((item) => item.trl))];
-	}, [projectFilters?.trl, projectsData]);
+		return ['all'];
+	}, [projectFilters?.trl]);
 	const dropdownOptions = useMemo<Record<DropdownFilterKey, OptionItem[]>>(() => {
 		const toCountMap = (countList?: Array<{ value: string; count: number }>): Map<string, number> =>
 			new Map((countList ?? []).map((item) => [item.value, item.count]));
@@ -954,28 +942,30 @@ const ProjectsPage: React.FC = () => {
 								</select>
 							</div>
 
-							<div className="projects-filter-item">
-								<label htmlFor="filter-trl">
-									{t('projects_label_trl')}
-									<span className="projects-filter-badge">доступно {projectAvailableCounts.trl}</span>
-								</label>
-								<select
-									id="filter-trl"
-									value={filters.trl}
-									onChange={(event) => {
-										const value = event.target.value === 'all'
-											? 'all'
-											: (Number(event.target.value) as TrlLevel);
-										handleFilterChange('trl', value);
-									}}
-								>
-									{trlOptions.map((option) => (
-										<option key={option} value={option}>
-											{option === 'all' ? t('projects_option_all_trl') : `TRL ${option}`}
-										</option>
-									))}
-								</select>
-							</div>
+							{hasRealTrlData && (
+								<div className="projects-filter-item">
+									<label htmlFor="filter-trl">
+										{t('projects_label_trl')}
+										<span className="projects-filter-badge">доступно {projectAvailableCounts.trl}</span>
+									</label>
+									<select
+										id="filter-trl"
+										value={filters.trl}
+										onChange={(event) => {
+											const value = event.target.value === 'all'
+												? 'all'
+												: (Number(event.target.value) as TrlLevel);
+											handleFilterChange('trl', value);
+										}}
+									>
+										{trlOptions.map((option) => (
+											<option key={option} value={option}>
+												{option === 'all' ? t('projects_option_all_trl') : `TRL ${option}`}
+											</option>
+										))}
+									</select>
+								</div>
+							)}
 						</div>
 					</div>
 

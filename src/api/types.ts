@@ -33,6 +33,12 @@ export interface BackendProject {
   teamIds?: string[];
   publicationsIds?: string[];
   files?: string[];
+  financingType?: string;
+  priority?: string;
+  contest?: string;
+  customer?: string;
+  mrnti?: string;
+  trl?: number | null;
 }
 
 export interface BackendEmployee {
