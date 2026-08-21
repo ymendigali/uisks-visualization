@@ -1,6 +1,0 @@
-[submodule "stivs-front-end"]
-	path = stivs-front-end
-	url = git@github.com:stw05/stivs-front-end.git
-[submodule "temp-uisks-backend"]
-	path = temp-uisks-backend
-	url = git@github.com:stw05/temp-uisks-backend.git
