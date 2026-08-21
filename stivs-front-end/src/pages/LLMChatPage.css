@@ -1,0 +1,467 @@
+.llm-chat-page {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  padding-bottom: 3rem;
+}
+
+.llm-hero {
+  background: linear-gradient(135deg, rgba(248, 250, 252, 0.98), rgba(219, 234, 254, 0.9));
+  color: #0f172a;
+  border-radius: 28px;
+  padding: clamp(1.75rem, 4vw, 3rem);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  box-shadow: 0 28px 60px rgba(15, 23, 42, 0.14);
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+}
+
+.llm-hero-header {
+  display: flex;
+  flex-direction: column;
+}
+
+.llm-hero-header h1 {
+  font-size: clamp(2rem, 4.5vw, 3.1rem);
+  margin: 0;
+}
+
+.llm-kicker {
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  letter-spacing: 0.2em;
+  color: #2563eb;
+  margin-bottom: 0.6rem;
+  font-weight: 600;
+}
+
+.llm-subtitle {
+  color: #475569;
+  font-size: 1.05rem;
+  max-width: 620px;
+  margin: 0.5rem 0 0;
+}
+
+.llm-hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: stretch;
+}
+
+.llm-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.9rem;
+}
+
+.llm-meta-card {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 1rem;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.05);
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.llm-meta-card span {
+  font-size: 0.95rem;
+}
+
+.llm-meta-card svg {
+  color: #2563eb;
+}
+
+.llm-callback-card {
+  min-width: 0;
+  background: rgba(15, 23, 42, 0.92);
+  padding: 1.75rem;
+  border-radius: 22px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  color: #f8fafc;
+  box-shadow: 0 20px 35px rgba(15, 23, 42, 0.25);
+}
+
+.llm-hero-label {
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: rgba(226, 232, 240, 0.75);
+}
+
+.llm-hero-value {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 0.55rem 0;
+  word-break: break-all;
+}
+
+.llm-hero-hint {
+  font-size: 0.85rem;
+  color: rgba(226, 232, 240, 0.7);
+}
+
+.llm-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+  gap: 2rem;
+}
+
+.llm-module-banner {
+  width: 100%;
+  box-sizing: border-box;
+  background: #dc2626;
+  color: #ffffff;
+  border-radius: 12px;
+  padding: 0.8rem 1rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+  text-align: center;
+  letter-spacing: 0.01em;
+}
+
+.llm-chat-panel,
+.llm-status-panel {
+  background: #fff;
+  border-radius: 24px;
+  padding: 1.75rem;
+  box-shadow: 0 25px 45px rgba(15, 23, 42, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.llm-chat-window {
+  min-height: 320px;
+  max-height: 520px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding-right: 0.5rem;
+}
+
+.llm-chat-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 280px;
+  color: #94a3b8;
+  border: 1px dashed #cbd5f5;
+  border-radius: 16px;
+}
+
+.llm-message {
+  padding: 1rem;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.llm-message.llm-message-user {
+  margin-left: 2rem;
+  background: #e0f2fe;
+  border-color: #bae6fd;
+}
+
+.llm-message.llm-message-system {
+  margin-right: 2rem;
+  background: #eef2ff;
+  border-color: #dbeafe;
+}
+
+.llm-message-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: #94a3b8;
+  margin-bottom: 0.45rem;
+}
+
+.llm-message-detail {
+  font-size: 0.88rem;
+  color: #475569;
+  margin-top: 0.4rem;
+}
+
+.llm-file-link,
+.llm-file-pill {
+  margin-top: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+  background: #0f172a;
+  color: #fff;
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+
+.llm-file-pill {
+  background: #1d4ed8;
+}
+
+.llm-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.status-queued {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-processing {
+  background: #e0ecff;
+  color: #1d4ed8;
+}
+
+.status-ready {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.status-failed {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.llm-chat-form textarea {
+  width: 100%;
+  border-radius: 16px;
+  border: 1px solid #cbd5f5;
+  padding: 1rem;
+  font-size: 1rem;
+  resize: vertical;
+  min-height: 150px;
+  transition: border 0.2s ease;
+}
+
+.llm-chat-form textarea:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.llm-form-actions {
+  margin-top: 1rem;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.llm-send-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border: none;
+  border-radius: 14px;
+  background: linear-gradient(120deg, #2563eb, #7c3aed);
+  color: #fff;
+  font-weight: 600;
+  padding: 0.8rem 1.5rem;
+  cursor: pointer;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.llm-send-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.llm-send-button:not(:disabled):hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(37, 99, 235, 0.35);
+}
+
+.llm-status-panel {
+  gap: 1rem;
+}
+
+.llm-panel-kicker {
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: #94a3b8;
+  font-size: 0.8rem;
+  margin-bottom: 0.25rem;
+}
+
+.llm-panel-meta {
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.llm-status-empty {
+  border: 1px dashed #94a3b8;
+  border-radius: 16px;
+  padding: 1.25rem;
+  text-align: center;
+  color: #94a3b8;
+}
+
+.llm-requests-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin: 0;
+  padding: 0;
+}
+
+.llm-request-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  padding: 1rem 1.25rem;
+  background: #f9fafb;
+}
+
+.llm-request-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.llm-request-id {
+  font-size: 0.85rem;
+  color: #94a3b8;
+  margin-bottom: 0.4rem;
+}
+
+.llm-request-prompt {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.llm-request-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  color: #64748b;
+  flex-wrap: wrap;
+  margin: 0.75rem 0;
+}
+
+.llm-events {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px dashed #cbd5f5;
+  padding-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.llm-events li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.85rem;
+}
+
+.llm-integration-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  padding: 1.2rem;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.llm-endpoints {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.llm-endpoints span {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  text-transform: uppercase;
+}
+
+.llm-endpoints code {
+  display: block;
+  background: #0f172a;
+  color: #f8fafc;
+  border-radius: 10px;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.85rem;
+  word-break: break-all;
+}
+
+.llm-integration-hint {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: #475569;
+}
+
+.llm-error-text {
+  color: #b91c1c;
+  margin-top: 0.45rem;
+}
+
+.llm-spin {
+  animation: llm-rotate 1s linear infinite;
+}
+
+@keyframes llm-rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 1024px) {
+  .llm-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .llm-hero-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .llm-hero {
+    padding: 1.75rem;
+  }
+
+  .llm-hero-header h1 {
+    font-size: 2rem;
+  }
+
+  .llm-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .llm-chat-panel,
+  .llm-status-panel {
+    padding: 1.25rem;
+  }
+
+  .llm-request-meta {
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+}

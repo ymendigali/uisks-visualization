@@ -1,0 +1,26 @@
+.employee-profile-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.employee-profile-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.employee-profile-header h1 {
+  margin: 0;
+}
+
+.employee-profile-card {
+  background: #ffffff;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 16px;
+  padding: 1rem 1.25rem;
+}
+
+.employee-profile-card h2 {
+  margin-top: 0;
+}

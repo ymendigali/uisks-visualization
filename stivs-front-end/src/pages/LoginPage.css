@@ -1,0 +1,122 @@
+/* LoginPage.css */
+
+.login-page-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-family: Arial, sans-serif;
+}
+
+.login-form-card {
+    background-color: #ffffff;
+    padding: 40px;
+    border-radius: 8px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    max-width: 400px;
+    text-align: center;
+}
+
+.login-form-card h2 {
+    margin-bottom: 30px;
+    color: #1e3a8a;
+    font-size: 24px;
+}
+
+.form-group {
+    margin-bottom: 20px;
+    text-align: left;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: bold;
+    color: #475569;
+}
+
+.form-group input[type="email"],
+.form-group input[type="password"] {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #475569;
+    border-radius: 4px;
+    box-sizing: border-box; /* Учитываем padding в ширине */
+    font-size: 16px;
+}
+
+.form-options {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 25px;
+    font-size: 14px;
+}
+
+.remember-me {
+    display: flex;
+    align-items: center;
+}
+
+.remember-me input[type="checkbox"] {
+    margin-right: 8px;
+}
+
+.forgot-password-link {
+    color: #007bff;
+    text-decoration: none;
+}
+
+.forgot-password-link:hover {
+    text-decoration: underline;
+}
+
+.login-button {
+    width: 100%;
+    padding: 12px 20px;
+    background-color: #007bff; /* Основной синий цвет */
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 18px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.login-button:hover {
+    background-color: #0056b3; /* Темнее при наведении */
+}
+
+.privacy-policy-text {
+    font-size: 13px;
+    color: #777;
+    margin-top: 25px;
+    line-height: 1.5;
+}
+
+.privacy-policy-text a {
+    color: #007bff;
+    text-decoration: none;
+}
+
+.privacy-policy-text a:hover {
+    text-decoration: underline;
+}
+
+.register-link-container {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid #eee; /* Разделитель */
+}
+
+.register-link {
+    color: #007bff;
+    text-decoration: none;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+.register-link:hover {
+    text-decoration: underline;
+}

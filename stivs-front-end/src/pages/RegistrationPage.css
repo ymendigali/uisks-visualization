@@ -1,0 +1,159 @@
+.pageContainer {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 0px 15px;
+    font-family: 'Inter', 'Segoe UI', sans-serif;
+}
+
+.registrationFormBox {
+    background: #ffffff;
+    padding: 40px;
+    border-radius: 12px;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08);
+    width: 100%;
+    max-width: 900px; /* Шире для сложной формы */
+}
+
+.formHeader {
+    font-size: 2.2rem; /* Крупный размер */
+    font-weight: 800;
+    color: #1e3a8a; /* Темный цвет, чтобы контрастировал с фоном */
+    text-align: center;
+    margin-bottom: 25px; /* Отступ от формы */
+}
+
+.form {
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+}
+
+
+
+.sectionTitle {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #475569;
+    padding-top: 5px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #eee;
+}
+
+.label {
+    display: block;
+    margin-bottom: 5px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #475569;
+}
+
+/* --- Классы для колонок --- */
+.rowThree {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    margin-bottom: 10px;
+}
+
+.rowTwo {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+    margin-bottom: 10px;
+}
+
+.rowFour {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 15px;
+    margin-bottom: 10px;
+}
+
+.inputGroup, .inputGroupFull {
+    display: flex;
+    flex-direction: column;
+}
+
+/* --- Классы для полей ввода --- */
+.input, .select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    box-sizing: border-box;
+    font-size: 1rem;
+    font-family: 'Inter', 'Segoe UI', sans-serif;
+}
+
+.inputFull {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    box-sizing: border-box;
+    font-size: 1rem;
+}
+
+/* --- Футер и кнопки --- */
+.footerActions {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    margin-top: 10px;
+}
+
+.agreementCheckbox {
+    font-size: 0.9rem;
+    color: #6b7280;
+    display: flex;
+    align-items: flex-start;
+}
+
+.agreementCheckbox input[type="checkbox"] {
+    margin-top: 2px;
+    margin-right: 10px;
+    min-width: 16px;
+    min-height: 16px;
+}
+
+.primaryButton {
+    width: 100%;
+    max-width: 300px;
+    padding: 12px 20px;
+    background-color: #2563eb;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.primaryButton:hover {
+    background-color: #1d4ed8;
+    font-family: 'Inter', 'Segoe UI', sans-serif;
+}
+
+.secondaryLink {
+    color: #6b7280;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.secondaryLink:hover {
+    text-decoration: underline;
+}
+
+/* Адаптивность для мобильных устройств */
+@media (max-width: 768px) {
+    .rowThree, .rowTwo, .rowFour {
+        grid-template-columns: 1fr; /* На маленьких экранах все в один столбец */
+    }
+    .registrationFormBox {
+        padding: 20px;
+    }
+}
