@@ -300,7 +300,6 @@ const FinancesPage: React.FC = () => {
 
   const financeQuery = useMemo(
     () => ({
-      year: filters.endYear,
       startYear: filters.startYear,
       endYear: filters.endYear,
       region: selectedRegion?.name ?? 'all',

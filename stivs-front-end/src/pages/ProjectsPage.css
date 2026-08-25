@@ -527,8 +527,8 @@
 	width: 100%;
 	border-collapse: collapse;
 	font-size: 0.88rem;
-	min-width: 980px;
-	table-layout: auto;
+	min-width: 1700px;
+	table-layout: fixed;
 }
 
 .projects-table thead th {
@@ -556,38 +556,66 @@
 	overflow: hidden;
 }
 
+.projects-col,
 .projects-cell {
-	max-width: 220px;
+	width: 160px;
+}
+
+.projects-col--irn,
+.projects-cell--irn {
+	width: 120px;
+}
+
+.projects-cell--irn .projects-cell-ellipsis {
+	white-space: nowrap;
 }
 
 .projects-col--title,
 .projects-cell--title {
-	max-width: 150px;
+	width: 280px;
 }
 
 .projects-col--applicant,
 .projects-cell--applicant {
-	max-width: 110px;
+	width: 240px;
+}
+
+.projects-col--priority,
+.projects-cell--priority {
+	width: 230px;
 }
 
 .projects-col--region,
 .projects-cell--region {
-	max-width: 170px;
+	width: 170px;
 }
 
 .projects-col--financingType,
 .projects-cell--financingType {
-	width: 115px;
-	min-width: 115px;
-	max-width: 115px;
+	width: 220px;
+}
+
+.projects-col--financingTotal,
+.projects-cell--financingTotal {
+	width: 150px;
+}
+
+.projects-col--status,
+.projects-cell--status {
+	width: 120px;
+}
+
+.projects-col--period,
+.projects-cell--period {
+	width: 110px;
 }
 
 .projects-cell-ellipsis {
 	display: block;
 	width: 100%;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
+	white-space: normal;
+	overflow-wrap: break-word;
+	word-break: break-word;
 }
 
 .projects-table tbody tr:last-child td {
