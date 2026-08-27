@@ -20,7 +20,7 @@ interface EmployeesFilterParams {
   classifier: string;
 }
 
-const H_INDEX_RANGE_BY_GROUP: Record<EmployeesFilterParams['hIndexGroup'], { min?: number; max?: number }> = {
+export const H_INDEX_RANGE_BY_GROUP: Record<EmployeesFilterParams['hIndexGroup'], { min?: number; max?: number }> = {
   '0-1': { min: 0, max: 1 },
   '2-5': { min: 2, max: 5 },
   '6-10': { min: 6, max: 10 },

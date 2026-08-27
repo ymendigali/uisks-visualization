@@ -188,6 +188,23 @@
     color: #0f172a;
 }
 
+.employees-column-reset {
+    margin-top: 0.4rem;
+    padding-top: 0.6rem;
+    border: none;
+    border-top: 1px solid rgba(148, 163, 184, 0.35);
+    background: none;
+    color: #2952d9;
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-align: left;
+    cursor: pointer;
+}
+
+.employees-column-reset:hover {
+    text-decoration: underline;
+}
+
 .employees-content {
     display: flex;
     gap: 1.5rem;

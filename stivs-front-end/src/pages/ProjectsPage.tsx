@@ -4,10 +4,11 @@ import { useRegionContext } from '../context/RegionContext';
 import type { RegionId } from '../context/RegionContext';
 import { useTranslation } from 'react-i18next';
 import './ProjectsPage.css';
-import { mapRegionToId } from '../api/services';
+import { mapRegionToId, projectsApi } from '../api/services';
 import type { BackendProject } from '../api/types';
 import { useProjectsData } from '../hooks/useProjectsData';
 import PageLoader from '../components/PageLoader/PageLoader';
+import { exportPdfReport } from '../utils/exportPdfReport';
 
 type ProjectStatus = 'active' | 'completed' | 'draft';
 type TrlLevel = 3 | 4 | 5 | 6 | 7 | 8 | 9;
@@ -307,6 +308,7 @@ const ProjectsPage: React.FC = () => {
 		),
 	);
 	const [isColumnPickerOpen, setIsColumnPickerOpen] = useState(false);
+	const [isExporting, setIsExporting] = useState(false);
 	const [currentPage, setCurrentPage] = useState(1);
 	const columnPickerRef = useRef<HTMLDivElement | null>(null);
 	const [openDropdown, setOpenDropdown] = useState<DropdownFilterKey | null>(null);
@@ -572,6 +574,82 @@ const ProjectsPage: React.FC = () => {
 		}
 	};
 
+	const getCellText = (columnKey: ColumnKey, project: Project): string => {
+		switch (columnKey) {
+			case 'irn':
+				return project.irn;
+			case 'title':
+				return project.title;
+			case 'applicant':
+				return project.applicant;
+			case 'priority':
+				return priorityLabels[project.priority] ?? project.priority;
+			case 'financingType':
+				return financingLabels[project.financingType] ?? project.financingType;
+			case 'financingTotal':
+				return formatCurrency(project.financingTotal);
+			case 'region':
+				return regionNameById[project.regionId] ?? '—';
+			case 'status':
+				return statusLabels[project.status] ?? project.status;
+			case 'period':
+				return `${project.startYear}-${project.endYear}`;
+			default:
+				return '';
+		}
+	};
+
+	const handleExportReport = async () => {
+		if (isExporting) {
+			return;
+		}
+
+		setIsExporting(true);
+		try {
+			const exportLimit = Math.min(Math.max(pageMeta.total, 1), 10000);
+			const response = await projectsApi.list({
+				irn: appliedFilters.irn === 'all' ? undefined : appliedFilters.irn,
+				q: appliedFilters.search || undefined,
+				region: selectedRegionId === 'national' ? undefined : (regionNameById[selectedRegionId] ?? undefined),
+				financingType: appliedFilters.financingType === 'all' ? undefined : appliedFilters.financingType,
+				priority: appliedFilters.priority === 'all' ? undefined : appliedFilters.priority,
+				applicant: appliedFilters.applicant === 'all' ? undefined : appliedFilters.applicant,
+				status: appliedFilters.status === 'all' ? undefined : appliedFilters.status,
+				contest: appliedFilters.contest === 'all' ? undefined : appliedFilters.contest,
+				customer: appliedFilters.customer === 'all' ? undefined : appliedFilters.customer,
+				mrnti: appliedFilters.mrnti === 'all' ? undefined : appliedFilters.mrnti,
+				trl: appliedFilters.trl === 'all' ? undefined : appliedFilters.trl,
+				startYear: appliedFilters.startYear,
+				endYear: appliedFilters.endYear,
+				page: 1,
+				limit: exportLimit,
+			});
+
+			const exportedProjects = response.items.map(toProject);
+			const regionLabel =
+				selectedRegionId === 'national'
+					? t('projects_filter_region_all')
+					: (regionNameById[selectedRegionId] ?? t('projects_filter_region_all'));
+
+			await exportPdfReport({
+				title: 'Отчёт по проектам',
+				fileNamePrefix: 'projects-report',
+				subtitleLines: [
+					`Регион: ${regionLabel}`,
+					`Период: ${appliedFilters.startYear}–${appliedFilters.endYear}`,
+					`Найдено проектов: ${response.meta.total}`,
+					`Сформировано: ${new Date().toLocaleString('ru-RU')}`,
+				],
+				columns: activeColumns.map((column) => ({ key: column.key, label: column.label })),
+				rows: exportedProjects.map((project) => activeColumns.map((column) => getCellText(column.key, project))),
+			});
+		} catch (error) {
+			console.error('Не удалось сформировать отчёт по проектам', error);
+		} finally {
+			setIsExporting(false);
+		}
+	};
+
 	const handleYearChange = (key: 'startYear' | 'endYear', value: number) => {
 		setFilters((prev) => {
 			const next = { ...prev, [key]: value };
@@ -681,9 +759,9 @@ const ProjectsPage: React.FC = () => {
 					{loadError && <p className="projects-load-error">{loadError}</p>}
 				</div>
 				<div className="projects-header-actions">
-				<button type="button" className="projects-header-button">
+				<button type="button" className="projects-header-button" onClick={handleExportReport} disabled={isExporting}>
 					<Download size={18} />
-					{t('projects_export_report')}
+					{isExporting ? t('projects_export_report_pending') : t('projects_export_report')}
 				</button>
 				</div>
 			</header>
@@ -737,16 +815,12 @@ const ProjectsPage: React.FC = () => {
 					<div className="projects-filter-block">
 						<div className="projects-filter-title">{t('projects_filter_region_title')}</div>
 						<div className="projects-filter-item">
-							<label htmlFor="projects-region">
-								{t('projects_filter_region_label')}
-								<span className="projects-filter-badge">доступно {projectAvailableCounts.region}</span>
-							</label>
 							<select
 								id="projects-region"
 								value={selectedRegionId}
 								onChange={(event) => setSelectedRegionId(event.target.value as RegionId)}
 							>
-								<option value="national">{t('projects_filter_region_all')}</option>
+								<option value="national">{t('projects_filter_region_label')}</option>
 								{regions.map((region) => (
 									<option key={region.id} value={region.id}>
 										{region.name}

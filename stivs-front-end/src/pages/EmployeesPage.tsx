@@ -5,10 +5,11 @@ import { useRegionContext } from '../context/RegionContext';
 import type { RegionId } from '../context/RegionContext'; 
 import './EmployeesPage.css';
 import { useTranslation } from 'react-i18next';
-import { mapRegionToId, resolveRegionLabel } from '../api/services';
+import { employeesApi, mapRegionToId, resolveRegionLabel } from '../api/services';
 import type { BackendEmployee } from '../api/types';
-import { useEmployeesData } from '../hooks/useEmployeesData';
+import { H_INDEX_RANGE_BY_GROUP, useEmployeesData } from '../hooks/useEmployeesData';
 import PageLoader from '../components/PageLoader/PageLoader';
+import { exportPdfReport } from '../utils/exportPdfReport';
 
 // --- 1. Типы данных и мок-данные ---
 // Значения этих полей приходят с backend как произвольные строки (реальные данные из БД),
@@ -113,6 +114,16 @@ const defaultVisibleEmployeeColumns: Record<EmployeeColumnKey, boolean> = employ
   {} as Record<EmployeeColumnKey, boolean>,
 );
 
+const initiallyHiddenColumns: EmployeeColumnKey[] = ['position', 'hIndexScopus', 'hIndex', 'age'];
+
+const initialVisibleEmployeeColumns: Record<EmployeeColumnKey, boolean> = {
+  ...defaultVisibleEmployeeColumns,
+  ...initiallyHiddenColumns.reduce(
+    (acc, key) => ({ ...acc, [key]: false }),
+    {} as Record<EmployeeColumnKey, boolean>,
+  ),
+};
+
 const createInitialFilters = (): EmployeeFilters => ({
   searchTerm: '',
   position: 'all',
@@ -183,9 +194,10 @@ const EmployeesPage: React.FC = () => {
   
   const [sort, setSort] = useState<SortState>({ key: 'name', direction: 'asc' });
   const [visibleColumns, setVisibleColumns] = useState<Record<EmployeeColumnKey, boolean>>(() => ({
-    ...defaultVisibleEmployeeColumns,
+    ...initialVisibleEmployeeColumns,
   }));
   const [isColumnPickerOpen, setIsColumnPickerOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const columnPickerRef = useRef<HTMLDivElement | null>(null);
 
   const regionNameById = useMemo(() => {
@@ -250,10 +262,6 @@ const EmployeesPage: React.FC = () => {
   const allMrntiCodes = useMemo(
     () => (employeeFilters?.mrnti.length ? employeeFilters.mrnti : ['11.00.00', '27.00.00', '55.00.00']),
     [employeeFilters?.mrnti],
-  );
-  const positionCountByValue = useMemo(
-    () => new Map((employeeFiltersMeta?.position ?? []).map((item) => [item.value, item.count])),
-    [employeeFiltersMeta?.position],
   );
   const degreeCountByValue = useMemo(
     () => new Map((employeeFiltersMeta?.degree ?? []).map((item) => [item.value, item.count])),
@@ -481,6 +489,31 @@ const EmployeesPage: React.FC = () => {
     }
   };
 
+  const getEmployeeCellText = (columnKey: EmployeeColumnKey, employee: Employee): string => {
+    switch (columnKey) {
+      case 'name':
+        return `${employee.name} (${employee.gender === 'male' ? t('gender_short_male') : t('gender_short_female')})`;
+      case 'position':
+        return employee.position;
+      case 'degree':
+        return employee.degree === 'none' ? '-' : employee.degree;
+      case 'scopusAuthorId':
+        return employee.scopusAuthorId;
+      case 'hIndexScopus':
+        return String(employee.hIndexScopus ?? employee.hIndex);
+      case 'researcherIdWos':
+        return employee.researcherIdWos || '-';
+      case 'hIndex':
+        return String(employee.hIndex);
+      case 'region':
+        return regionNameById[employee.regionId] ?? employee.regionLabel ?? t('not_available_short');
+      case 'age':
+        return String(currentYear - employee.birthYear);
+      default:
+        return '';
+    }
+  };
+
 
   // --- ЛОГИКА СОРТИРОВКИ ---
   // Фильтрация (регион, подразделение, пол, гражданство, роль, степень, МРНТИ, возраст и т.д.)
@@ -513,9 +546,61 @@ const EmployeesPage: React.FC = () => {
     return list;
   }, [sort, employeesData]);
 
-  // Заглушка для действий с сотрудниками
-  const handleAction = () => {
-    // Intentionally no-op until action handlers are connected.
+  const handleExportReport = async () => {
+    if (isExporting) {
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      const selectedRegionName =
+        appliedFilters.regionId === 'all'
+          ? (selectedRegionId === 'national' ? undefined : (regionNameById[selectedRegionId] ?? undefined))
+          : (regionNameById[appliedFilters.regionId] ?? undefined);
+      const hIndexRange = H_INDEX_RANGE_BY_GROUP[appliedFilters.hIndexGroup];
+      const exportLimit = Math.min(Math.max(pageMeta.total, 1), 10000);
+
+      const response = await employeesApi.list({
+        page: 1,
+        limit: exportLimit,
+        searchTerm: appliedFilters.searchTerm || undefined,
+        region: selectedRegionName,
+        position: appliedFilters.position === 'all' ? undefined : appliedFilters.position,
+        department: appliedFilters.department === 'all' ? undefined : appliedFilters.department,
+        minAge: appliedFilters.minAge,
+        maxAge: appliedFilters.maxAge,
+        affiliateType: appliedFilters.affiliateType === 'all' ? undefined : appliedFilters.affiliateType,
+        gender: appliedFilters.gender === 'all' ? undefined : appliedFilters.gender,
+        degree: appliedFilters.degree === 'all' ? undefined : appliedFilters.degree,
+        citizenship: appliedFilters.citizenship === 'all' ? undefined : appliedFilters.citizenship,
+        projectRole: appliedFilters.projectRole === 'all' ? undefined : appliedFilters.projectRole,
+        hIndexGroup: appliedFilters.hIndexGroup === 'all' ? undefined : appliedFilters.hIndexGroup,
+        mrnti: appliedFilters.mrnti === 'all' ? undefined : appliedFilters.mrnti,
+        classifier: appliedFilters.classifier === 'all' ? undefined : appliedFilters.classifier,
+        minHIndex: hIndexRange.min,
+        maxHIndex: hIndexRange.max,
+        q: appliedFilters.searchTerm || undefined,
+      });
+
+      const exportedEmployees = response.items.map(toEmployee);
+      const regionLabel = selectedRegionName ?? t('filter_option_all_regions');
+
+      await exportPdfReport({
+        title: 'Отчёт по сотрудникам',
+        fileNamePrefix: 'employees-report',
+        subtitleLines: [
+          `Регион: ${regionLabel}`,
+          `Найдено сотрудников: ${response.meta.total}`,
+          `Сформировано: ${new Date().toLocaleString('ru-RU')}`,
+        ],
+        columns: activeColumns.map((column) => ({ key: column.key, label: column.label })),
+        rows: exportedEmployees.map((employee) => activeColumns.map((column) => getEmployeeCellText(column.key, employee))),
+      });
+    } catch (error) {
+      console.error('Не удалось сформировать отчёт по сотрудникам', error);
+    } finally {
+      setIsExporting(false);
+    }
   };
   
   // const totalEmployeesCount = filteredEmployees.length;
@@ -538,10 +623,11 @@ const EmployeesPage: React.FC = () => {
           <button
             type="button"
             className="employees-header-button"
-            onClick={handleAction}
+            onClick={handleExportReport}
+            disabled={isExporting}
           >
             <Download size={18} />
-            {t('button_export_report')}
+            {isExporting ? t('button_export_report_pending') : t('button_export_report')}
           </button>
         </div>
       </header>
@@ -575,16 +661,27 @@ const EmployeesPage: React.FC = () => {
             </button>
             {isColumnPickerOpen && (
               <div className="employees-column-list">
-                {employeeColumnDefinitions.map((column) => (
-                  <label key={column.key} className="employees-column-option">
-                    <input
-                      type="checkbox"
-                      checked={visibleColumns[column.key]}
-                      onChange={() => toggleColumn(column.key)}
-                    />
-                    {column.label}
-                  </label>
-                ))}
+                {employeeColumnDefinitions
+                  .filter((column) => visibleColumns[column.key])
+                  .map((column) => (
+                    <label key={column.key} className="employees-column-option">
+                      <input
+                        type="checkbox"
+                        checked={visibleColumns[column.key]}
+                        onChange={() => toggleColumn(column.key)}
+                      />
+                      {column.label}
+                    </label>
+                  ))}
+                {Object.values(visibleColumns).some((isVisible) => !isVisible) && (
+                  <button
+                    type="button"
+                    className="employees-column-reset"
+                    onClick={() => setVisibleColumns({ ...defaultVisibleEmployeeColumns })}
+                  >
+                    Показать все столбцы
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -702,26 +799,6 @@ const EmployeesPage: React.FC = () => {
                     <option key={degreeOption} value={degreeOption}>
                       {degreeOption}
                       {degreeCountByValue.get(degreeOption) !== undefined ? ` (${degreeCountByValue.get(degreeOption)})` : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="employees-filter-item">
-                <label htmlFor="position-filter">
-                  {t('filter_label_position')}
-                  <span className="employees-filter-badge">доступно {employeesAvailableCounts.position}</span>
-                </label>
-                <select
-                  id="position-filter"
-                  value={filters.position}
-                  onChange={(e) => handleFilterChange('position', e.target.value)}
-                >
-                  <option value="all">{t('filter_option_all')}</option>
-                  {allPositions.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                      {positionCountByValue.get(p) !== undefined ? ` (${positionCountByValue.get(p)})` : ''}
                     </option>
                   ))}
                 </select>
