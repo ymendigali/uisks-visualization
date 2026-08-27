@@ -287,10 +287,7 @@ const EmployeesPage: React.FC = () => {
     () => new Map((employeeFiltersMeta?.citizenship ?? []).map((item) => [item.value, item.count])),
     [employeeFiltersMeta?.citizenship],
   );
-  const hIndexGroupCountByValue = useMemo(
-    () => new Map((employeeFiltersMeta?.hIndexGroup ?? []).map((item) => [item.value, item.count])),
-    [employeeFiltersMeta?.hIndexGroup],
-  );
+  // hIndexGroupCountByValue: использовался только в скрытом блоке "Метрики" (см. ниже), временно не нужен.
   const mrntiCountByValue = useMemo(
     () => new Map((employeeFiltersMeta?.mrnti ?? []).map((item) => [item.value, item.count])),
     [employeeFiltersMeta?.mrnti],
@@ -364,28 +361,8 @@ const EmployeesPage: React.FC = () => {
     setCurrentPage(1);
   };
   
-  // Обработчик для ввода возраста
-  const handleAgeChange = (name: 'minAge' | 'maxAge', value: string) => {
-    let numValue = parseInt(value, 10);
-    
-    // Если ввод пуст или нечисловой, используем крайние границы
-    if (isNaN(numValue) || value === '') {
-        numValue = (name === 'minAge') ? MIN_AGE_LIMIT : MAX_AGE_LIMIT;
-    }
+  // handleAgeChange: использовался только в скрытом блоке "Метрики" (см. ниже), временно не нужен.
 
-    // Проверка границ
-    if (name === 'minAge') {
-        numValue = Math.min(numValue, filters.maxAge);
-        numValue = Math.max(numValue, MIN_AGE_LIMIT);
-    }
-    if (name === 'maxAge') {
-        numValue = Math.max(numValue, filters.minAge);
-        numValue = Math.min(numValue, MAX_AGE_LIMIT);
-    }
-    
-    setFilters(prev => ({ ...prev, [name]: numValue }));
-  };
-  
   // Функция для изменения сортировки при клике на заголовок таблицы
   const handleSortChange = (key: keyof Employee | 'age') => {
       // Для возраста используем 'birthYear', но в обратном порядке сортировки
@@ -879,6 +856,7 @@ const EmployeesPage: React.FC = () => {
             </div>
           </div>
 
+         {/* Блок "Метрики" (возраст, индекс Хирша) временно скрыт по просьбе — логика и стейт фильтров сохранены, не удалены.
          <div className="employees-filter-block">
 
             <div className="employees-filter-title">{t('filter_section_metrics')}</div>
@@ -925,6 +903,7 @@ const EmployeesPage: React.FC = () => {
               </select>
             </div>
           </div>
+          */}
 
           <div className="employees-filter-actions">
             <button type="button" className="employees-primary-button" onClick={applyFilters}>

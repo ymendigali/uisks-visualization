@@ -256,11 +256,21 @@ const ProjectsPage: React.FC = () => {
 		[t],
 	);
 
+	// Данные из БД приходят как "Грантовое финансирование" / "Программно-целевое финансирование" —
+	// в фильтре и таблице показываем короткую форму (Грантовое / Программно-целевое / Коммерциализация РННТД).
+	const formatFinancingType = (value: string): string => {
+		if (financingLabels[value]) {
+			return financingLabels[value];
+		}
+		return value.replace(/\s*финансирование\s*$/i, '').trim() || value;
+	};
+
 	const statusLabels = useMemo<Record<string, string>>(
 		() => ({
 			active: t('projects_status_active'),
 			completed: t('projects_status_completed'),
 			draft: t('projects_status_draft'),
+			in_progress: t('projects_status_in_progress'),
 		}),
 		[t],
 	);
@@ -374,10 +384,12 @@ const ProjectsPage: React.FC = () => {
 		() => ['all', ...(projectFilters?.mrnti.length ? projectFilters.mrnti : [...new Set(projectsData.map((item) => item.mrnti))])],
 		[projectFilters?.mrnti, projectsData],
 	);
-	const statusOptions = useMemo(
-		() => ['all', ...(projectFilters?.status.length ? projectFilters.status : Object.keys(statusLabels))],
-		[projectFilters?.status, statusLabels],
-	);
+	const statusOptions = useMemo(() => {
+		const backendStatuses = projectFilters?.status.length ? projectFilters.status : Object.keys(statusLabels);
+		// "in_progress" — новый статус, добавленный вручную: под него ещё нет проектов в базе,
+		// но пункт должен быть в списке независимо от того, что вернул backend.
+		return ['all', ...new Set([...backendStatuses, 'in_progress'])];
+	}, [projectFilters?.status, statusLabels]);
 	const hasRealTrlData = Boolean(projectFilters?.trl.length);
 	const trlOptions = useMemo<(TrlLevel | 'all')[]>(() => {
 		if (projectFilters?.trl.length) {
@@ -422,7 +434,7 @@ const ProjectsPage: React.FC = () => {
 				financingTypeOptions,
 				t('projects_filter_financing_type'),
 				financingTypeCountMap,
-				(value) => financingLabels[value] ?? value,
+				formatFinancingType,
 			),
 		};
 	}, [applicantOptions, customerOptions, financingLabels, financingTypeOptions, irnOptions, mrntiOptions, projectFiltersMeta, t]);
@@ -560,7 +572,7 @@ const ProjectsPage: React.FC = () => {
 			case 'priority':
 				return renderCompactText(priorityLabels[project.priority] ?? project.priority);
 			case 'financingType':
-				return renderCompactText(financingLabels[project.financingType] ?? project.financingType);
+				return renderCompactText(formatFinancingType(project.financingType));
 			case 'financingTotal':
 				return formatCurrency(project.financingTotal);
 			case 'region':
@@ -585,7 +597,7 @@ const ProjectsPage: React.FC = () => {
 			case 'priority':
 				return priorityLabels[project.priority] ?? project.priority;
 			case 'financingType':
-				return financingLabels[project.financingType] ?? project.financingType;
+				return formatFinancingType(project.financingType);
 			case 'financingTotal':
 				return formatCurrency(project.financingTotal);
 			case 'region':
