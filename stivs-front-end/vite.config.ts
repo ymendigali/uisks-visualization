@@ -7,6 +7,7 @@ const isProxyDebugEnabled = process.env.VITE_PROXY_DEBUG === 'true'
 export default defineConfig({
   plugins: [react()],
   server: {
+    allowedHosts: true,
     proxy: {
       '/api': {
         target: 'http://localhost:3000',
