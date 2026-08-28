@@ -1,5 +1,6 @@
-import { ProjectRepository } from "../../ports/CatalogRepositories";
+import { EmployeeRepository, ProjectRepository } from "../../ports/CatalogRepositories";
 import { DashboardSummary } from "../../../domain/dashboard/DashboardSummary";
+import { MAX_LIMIT } from "../../ports/Pagination";
 
 type DashboardSummaryFilters = {
   region?: string;
@@ -188,6 +189,33 @@ const detectFinancingType = (tags: string[], fallback?: string): "grant" | "prog
   return "other";
 };
 
+// A single project row has an obviously corrupted "Количество Патентов" value (4195937,
+// next highest real value is 9) coming from a source-Excel data entry error. Any per-project
+// count above this is discarded so that one bad cell doesn't wreck the aggregate.
+const MAX_PLAUSIBLE_PROJECT_COUNT = 200;
+
+const pickExcelCount = (excelData: Record<string, unknown>, keys: string[]): number => {
+  const value = pickExcelNumber(excelData, keys);
+  return value <= MAX_PLAUSIBLE_PROJECT_COUNT ? value : 0;
+};
+
+type AcademicDegreeLevel = "doctor" | "candidate" | "master" | "other";
+
+const classifyAcademicDegree = (rawDegree: string): AcademicDegreeLevel => {
+  const withoutDoctoralStudents = rawDegree.toLowerCase().replace(/докторант\w*|phd[\s-]?student/gi, "");
+
+  if (/доктор|ph\.?\s*d\.?\b|d\.?\s?sc\b|doctor\s+of|д\.\s?[а-яё]{1,4}\.?\s?н\.?/i.test(withoutDoctoralStudents)) {
+    return "doctor";
+  }
+  if (/кандидат|ғылымдарының\s*кандидаты|candidate\s+of|к\.\s?[а-яё]{1,4}\.?\s?н\.?/i.test(withoutDoctoralStudents)) {
+    return "candidate";
+  }
+  if (/магистр|master('|')?s?\b/i.test(withoutDoctoralStudents)) {
+    return "master";
+  }
+  return "other";
+};
+
 const sortUniqueStrings = (values: Iterable<string>): string[] =>
   Array.from(new Set(Array.from(values).map((value) => toStringValue(value)).filter(Boolean))).sort((a, b) =>
     a.localeCompare(b, "ru")
@@ -206,7 +234,10 @@ const getProjectOrganization = (projectLead: string, excelData: Record<string, u
   ]) || projectLead;
 
 export class DashboardService {
-  constructor(private readonly projectRepository: ProjectRepository) {}
+  constructor(
+    private readonly projectRepository: ProjectRepository,
+    private readonly employeeRepository: EmployeeRepository
+  ) {}
 
   async getFilters(): Promise<DashboardFilterOptions> {
     const projects = await this.listAllProjects();
@@ -295,6 +326,8 @@ export class DashboardService {
     let journals = 0;
     let conferences = 0;
     let books = 0;
+    let securityDocuments = 0;
+    let implementations = 0;
     let totalBudgetRaw = 0;
     let selectedYearBudgetRaw = 0;
     let durationSumYears = 0;
@@ -328,6 +361,9 @@ export class DashboardService {
 
       const projectBooks = pickExcelNumber(excelData, ["Количество книг"]);
       books += projectBooks;
+
+      securityDocuments += pickExcelCount(excelData, ["Количество Патентов"]);
+      implementations += pickExcelCount(excelData, ["Количество внедрений"]);
 
       const budgetRaw = Math.max(project.budget, 0);
       totalBudgetRaw += budgetRaw;
@@ -382,6 +418,32 @@ export class DashboardService {
     conferences = Math.max(totalPublications - journals - books, 0);
     const other = Math.max(totalPublications - journals - conferences - books, 0);
 
+    const employees = await this.employeeRepository.list({
+      region: isAllRegionValue(region) ? undefined : region,
+      page: 1,
+      limit: MAX_LIMIT
+    });
+
+    let doctors = 0;
+    let candidates = 0;
+    let masters = 0;
+
+    for (const employee of employees.items) {
+      const degree = toStringValue(employee.metrics["academicDegree"]);
+      if (!degree) {
+        continue;
+      }
+
+      const level = classifyAcademicDegree(degree);
+      if (level === "doctor") {
+        doctors += 1;
+      } else if (level === "candidate") {
+        candidates += 1;
+      } else if (level === "master") {
+        masters += 1;
+      }
+    }
+
     const byRegion = Array.from(byRegionMap.entries())
       .map(([regionName, value]) => ({
         region: regionName,
@@ -409,19 +471,26 @@ export class DashboardService {
         journals: Math.round(journals),
         conferences: Math.round(conferences),
         books: Math.round(books),
-        other: Math.round(other)
+        other: Math.round(other),
+        securityDocuments: Math.round(securityDocuments),
+        implementations: Math.round(implementations)
       },
       people: {
         total: uniquePeople.size,
-        docents: 0,
-        professors: 0,
-        associateProfessors: 0,
+        docents: doctors,
+        professors: candidates,
+        associateProfessors: masters,
+        // No birth date/age field exists anywhere in the imported project or employee data,
+        // so there is nothing to average — left at 0 until that data is collected.
         avgAge: 0
       },
       finances: {
         total: Number(totalBudget.toFixed(2)),
         lastYear: Number(lastYear.toFixed(2)),
-        avgExpense: projects.length ? Number((lastYear / projects.length).toFixed(2)) : 0,
+        // In thousand KZT, matching the "unit_thousand_tg" label on the frontend card.
+        // (lastYear is already scaled to billions, so dividing by project count there
+        // rounds every project down to 0 - use the raw pre-scaling amount instead.)
+        avgExpense: projects.length ? Number((selectedYearBudgetRaw / projects.length / 1000).toFixed(0)) : 0,
         budgetUsage: totalBudget > 0 ? Number(((lastYear / totalBudget) * 100).toFixed(1)) : 0,
         regionalPrograms: byRegion.length
       },

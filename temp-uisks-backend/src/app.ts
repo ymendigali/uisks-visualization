@@ -60,7 +60,7 @@ export const buildApp = (): express.Express => {
   const employeeService = new EmployeeService(employeeRepository);
   const publicationService = new PublicationService(publicationRepository, projectRepository);
   const financeService = new FinanceService(financeRepository, projectRepository);
-  const dashboardService = new DashboardService(projectRepository);
+  const dashboardService = new DashboardService(projectRepository, employeeRepository);
 
   app.use("/api/v1", healthRoutes);
   app.use(
