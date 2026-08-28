@@ -41,7 +41,7 @@ type PriorityDirection = 'all' | 'digital' | 'education' | 'biotech' | 'energy';
 type CompetitionName = 'all' | 'innovation' | 'grant2025' | 'pilot';
 type ApplicantType = 'all' | 'universities' | 'companies' | 'research';
 type CustomerType = 'all' | 'ministry' | 'state-companies' | 'private';
-type ProjectStatus = 'all' | 'active' | 'completed' | 'pipeline';
+type ProjectStatus = 'all' | 'active' | 'completed';
 
 interface FilterState {
   irn: string;
@@ -74,9 +74,9 @@ const getFinancesOptions = (t: (key: string) => string) => ({
   ],
   financingType: [
     { value: 'all', label: t('finances_option_all_financing_types') },
-    { value: 'gf', label: t('finances_financing_gf') },
-    { value: 'pcf', label: t('finances_financing_pcf') },
-    { value: 'commercial', label: t('finances_financing_commercial') },
+    { value: 'Грантовое финансирование', label: t('finances_financing_gf') },
+    { value: 'Программно-целевое финансирование', label: t('finances_financing_pcf') },
+    { value: 'Коммерциализация', label: t('finances_financing_commercial') },
   ],
   cofinancing: [
     { value: 'all', label: t('finances_option_all_cofinancing') },
@@ -93,10 +93,6 @@ const getFinancesOptions = (t: (key: string) => string) => ({
   ],
   priority: [
     { value: 'all', label: t('finances_option_all_priorities') },
-    { value: 'digital', label: t('finances_priority_digital') },
-    { value: 'education', label: t('finances_priority_education') },
-    { value: 'biotech', label: t('finances_priority_biotech') },
-    { value: 'energy', label: t('finances_priority_energy') },
   ],
   competition: [
     { value: 'all', label: t('finances_option_all_competitions') },
@@ -120,7 +116,6 @@ const getFinancesOptions = (t: (key: string) => string) => ({
     { value: 'all', label: t('finances_option_all_statuses') },
     { value: 'active', label: t('finances_status_active') },
     { value: 'completed', label: t('finances_status_completed') },
-    { value: 'pipeline', label: t('finances_status_pipeline') },
   ],
 });
 
@@ -128,7 +123,11 @@ const COFINANCING_DEFAULTS: CofinancingType[] = ['contract', 'actual'];
 
 const EXPENSE_DEFAULTS: ExpenseCategory[] = ['salary', 'travel', 'support', 'materials', 'rent', 'protocol'];
 
-const FINANCING_TYPE_DEFAULTS: FinancingType[] = ['gf', 'pcf', 'commercial'];
+const FINANCING_TYPE_DEFAULTS: FinancingType[] = [
+  'Грантовое финансирование',
+  'Программно-целевое финансирование',
+  'Коммерциализация',
+];
 
 const FINANCES_PERIOD_RANGE = { min: 2020, max: 2040 } as const;
 
@@ -231,19 +230,35 @@ const FinancesPage: React.FC = () => {
     [resolveOptionLabel],
   );
 
+  // Always keeps the canonical fallback options (e.g. the three financing forms) available,
+  // appending any additional real values returned by the API that aren't in the fallback list.
+  const toMergedOptions = useCallback(
+    (values: string[] | undefined, fallbackOptions: Array<{ value: string; label: string }>) => {
+      const fallbackAll = fallbackOptions.find((option) => option.value === 'all');
+      const fallbackRest = fallbackOptions.filter((option) => option.value !== 'all');
+      const extra = (values ?? [])
+        .filter((value) => !fallbackRest.some((option) => option.value === value))
+        .map((value) => ({ value, label: value }));
+
+      const merged = [...fallbackRest, ...extra];
+      return fallbackAll ? [fallbackAll, ...merged] : merged;
+    },
+    [],
+  );
+
   const financesOptions = useMemo(
     () => ({
       irn: toOptions(apiFilterOptions?.irn, defaultFinancesOptions.irn, true),
-      financingType: toOptions(apiFilterOptions?.financingType, defaultFinancesOptions.financingType, true),
+      financingType: toMergedOptions(apiFilterOptions?.financingType, defaultFinancesOptions.financingType),
       cofinancing: toOptions(apiFilterOptions?.cofinancing, defaultFinancesOptions.cofinancing, true),
       expense: toOptions(apiFilterOptions?.expense, defaultFinancesOptions.expense),
       priority: toOptions(apiFilterOptions?.priority, defaultFinancesOptions.priority, true),
       competition: toOptions(apiFilterOptions?.competition, defaultFinancesOptions.competition, true),
       applicant: toOptions(apiFilterOptions?.applicant, defaultFinancesOptions.applicant, true),
       customer: toOptions(apiFilterOptions?.customer, defaultFinancesOptions.customer, true),
-      status: toOptions(apiFilterOptions?.status, defaultFinancesOptions.status, true),
+      status: toMergedOptions(apiFilterOptions?.status, defaultFinancesOptions.status),
     }),
-    [apiFilterOptions, defaultFinancesOptions, toOptions],
+    [apiFilterOptions, defaultFinancesOptions, toOptions, toMergedOptions],
   );
 
   // Create aliases for backward compatibility with JSX
@@ -1187,10 +1202,8 @@ const FinancesPage: React.FC = () => {
           >
             <header className="finances-chart-header">
               <h2>{t('finances_expense_distribution_title')}</h2>
-              <span>{t('finances_expense_distribution_subtitle')}</span>
             </header>
             <div className="finances-chip-select-row">
-              <label htmlFor="expenses-chart-filter">{t('finances_add_category_label')}</label>
               <select
                 id="expenses-chart-filter"
                 className="finances-chip-select"
