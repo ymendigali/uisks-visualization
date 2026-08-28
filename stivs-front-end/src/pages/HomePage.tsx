@@ -148,8 +148,8 @@ const HomePage: React.FC = () => {
           { label: t('card_publications_patents'), value: formatNumber(metrics.publications.conferences) },
           { label: t('card_publications_acts'), value: formatNumber(metrics.publications.books) },
           { label: t('card_publications_monographs'), value: formatNumber(metrics.publications.other) },
-          { label: t('card_publications_security_docs'), value: formatNumber(metrics.publications.other) },
-          { label: t('card_publications_implementations'), value: formatNumber(metrics.publications.other) },
+          { label: t('card_publications_security_docs'), value: formatNumber(metrics.publications.securityDocuments ?? 0) },
+          { label: t('card_publications_implementations'), value: formatNumber(metrics.publications.implementations ?? 0) },
         ],
       },
       {

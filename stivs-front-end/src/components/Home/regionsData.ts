@@ -13,6 +13,8 @@ export interface RegionMetrics {
     conferences: number;
     books: number;
     other: number;
+    securityDocuments?: number;
+    implementations?: number;
   };
   people: {
     total: number;
