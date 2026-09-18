@@ -21,7 +21,7 @@ const resources = {
       "publications_page_title": "Результативность", // Обновлено
       "finances_page_title": "Финансы",
       "finances_page_heading": "Финансы",
-      "finances_page_description": "Мониторинг финансирования проектов и программ.",
+      "finances_page_description": "Мониторинг одобренной суммы к финансированию проектов и программ.",
       "finances_select_region_label": "Выберите регион",
       "finances_region_all_label": "Вся Республика Казахстан",
       "finances_filters_aria_label": "Фильтры финансирования",
@@ -142,7 +142,7 @@ const resources = {
       "card_publications_patents": "Материалы конференций",
       "card_publications_acts": "Монографии",
       "card_publications_monographs": "Прочие публикации",
-      "card_publications_security_docs": "Охранные документы",
+      "card_publications_security_docs": "Охранные документы (Патенты)",
       "card_publications_implementations": "Акты внедрения",
 
       // Сотрудники
@@ -262,6 +262,7 @@ const resources = {
       "filter_pcf": "Программно-целевое финансирование",
       "filter_commercial": "Коммерциализация",
       "filter_year_range": "Период",
+      "filter_all_periods": "Все периоды",
       "filter_cofinancing_label": "Софинансирование:",
       "filter_cofinancing_contract": "По договору",
       "filter_cofinancing_actual": "Фактическое",
@@ -717,7 +718,7 @@ const resources = {
       "publications_page_title": "Басылымдар", // Обновлено
       "finances_page_title": "Қаржы",
       "finances_page_heading": "Қаржы",
-      "finances_page_description": "Жобалар мен бағдарламалардың қаржыландырылуын мониторингтеу.",
+      "finances_page_description": "Жобалар мен бағдарламаларды қаржыландыруға бекітілген соманы мониторингтеу.",
       "finances_select_region_label": "Аймақты таңдаңыз",
       "finances_region_all_label": "Қазақстан Республикасының барлық аймақтары",
       "finances_filters_aria_label": "Қаржыландыру сүзгілері",
@@ -837,7 +838,7 @@ const resources = {
       "card_publications_patents": "Конференция материалдары",
       "card_publications_acts": "Монографиялар",
       "card_publications_monographs": "Басқа басылымдар",
-      "card_publications_security_docs": "Қорғау құжаттары",
+      "card_publications_security_docs": "Қорғау құжаттары (Патенттер)",
       "card_publications_implementations": "Енгізу актілері",
 
       // Қызметкерлер (Сотрудники)
@@ -943,6 +944,7 @@ const resources = {
       "filter_pcf": "Бағдарламалық-нысаналы қаржыландыру",
       "filter_commercial": "Коммерцияландыру",
       "filter_year_range": "Кезең",
+      "filter_all_periods": "Барлық кезеңдер",
       "filter_cofinancing_label": "Қоса қаржыландыру:",
       "filter_cofinancing_contract": "Шарт бойынша",
       "filter_cofinancing_actual": "Нақты",
@@ -1397,7 +1399,7 @@ const resources = {
       "publications_page_title": "Publications",
       "finances_page_title": "Finances",
       "finances_page_heading": "Finances",
-      "finances_page_description": "Funding monitoring for projects and programs.",
+      "finances_page_description": "Monitoring of the approved funding amount for projects and programs.",
       "finances_select_region_label": "Select region",
       "finances_region_all_label": "Entire Republic of Kazakhstan",
       "finances_filters_aria_label": "Financing filters",
@@ -1514,7 +1516,7 @@ const resources = {
       "card_publications_patents": "Conference proceedings",
       "card_publications_acts": "Monographs",
       "card_publications_monographs": "Other publications",
-      "card_publications_security_docs": "Protective documents",
+      "card_publications_security_docs": "Protective documents (Patents)",
       "card_publications_implementations": "Implementation acts",
 
       "card_employees_title": "Employees",
@@ -1615,6 +1617,7 @@ const resources = {
       "filter_pcf": "Program-targeted financing",
       "filter_commercial": "Commercialization",
       "filter_year_range": "Period",
+      "filter_all_periods": "All periods",
       "filter_cofinancing_label": "Co-financing:",
       "filter_cofinancing_contract": "By contract",
       "filter_cofinancing_actual": "Actual",

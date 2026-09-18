@@ -13,25 +13,21 @@ import { dashboardApi } from '../api/services';
 import type { DashboardFilterOptions, DashboardSummary } from '../api/types';
 import PageLoader from '../components/PageLoader/PageLoader';
 
-const HOME_YEAR_RANGE = { min: 2020, max: 2025 } as const;
-
 const HomePage: React.FC = () => {
   const { t } = useTranslation();
   const { selectedRegionId, selectedRegion, setSelectedRegionId } = useRegionContext();
   const [dashboardSummary, setDashboardSummary] = useState<DashboardSummary | null>(null);
-  const [dashboardFilters, setDashboardFilters] = useState<DashboardFilterOptions>({ priority: [], applicant: [] });
+  const [dashboardFilters, setDashboardFilters] = useState<DashboardFilterOptions>({
+    priority: [],
+    applicant: [],
+    period: [],
+  });
   const [isDashboardLoading, setIsDashboardLoading] = useState(true);
   const [isFiltersLoading, setIsFiltersLoading] = useState(true);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
-  const [selectedYear, setSelectedYear] = useState<number>(HOME_YEAR_RANGE.max);
+  const [selectedPeriod, setSelectedPeriod] = useState<string>('');
   const [selectedPriority, setSelectedPriority] = useState<string>('');
   const [selectedOrganization, setSelectedOrganization] = useState<string>('');
-
-  const yearOptions = useMemo(
-    () =>
-      Array.from({ length: HOME_YEAR_RANGE.max - HOME_YEAR_RANGE.min + 1 }, (_, index) => HOME_YEAR_RANGE.max - index),
-    [],
-  );
 
   useEffect(() => {
     const loadDashboardFilters = async () => {
@@ -40,7 +36,7 @@ const HomePage: React.FC = () => {
         const filters = await dashboardApi.filters();
         setDashboardFilters(filters);
       } catch {
-        setDashboardFilters({ priority: [], applicant: [] });
+        setDashboardFilters({ priority: [], applicant: [], period: [] });
       } finally {
         setIsFiltersLoading(false);
       }
@@ -78,15 +74,13 @@ const HomePage: React.FC = () => {
       setIsDashboardLoading(true);
       setDashboardError(null);
       try {
-        const yearForRequest =
-          selectedYear >= HOME_YEAR_RANGE.min && selectedYear <= HOME_YEAR_RANGE.max
-            ? selectedYear
-            : undefined;
+        const [periodStart, periodEnd] = selectedPeriod ? selectedPeriod.split('-').map(Number) : [];
         const summary = await dashboardApi.summary({
           priority: asDashboardFilterParam(selectedPriority),
           organization: asDashboardFilterParam(selectedOrganization),
           region: selectedRegion?.name ?? 'all',
-          year: yearForRequest,
+          startYear: Number.isFinite(periodStart) ? periodStart : undefined,
+          endYear: Number.isFinite(periodEnd) ? periodEnd : undefined,
         });
         setDashboardSummary(summary);
       } catch (error) {
@@ -99,7 +93,7 @@ const HomePage: React.FC = () => {
     };
 
     void loadDashboardSummary();
-  }, [selectedOrganization, selectedPriority, selectedRegion?.name, selectedYear]);
+  }, [selectedOrganization, selectedPriority, selectedRegion?.name, selectedPeriod]);
 
   const nationalMetrics = useMemo(() => calculateNationalMetrics(), []);
   const metrics = useMemo(() => {
@@ -196,8 +190,8 @@ const HomePage: React.FC = () => {
     setSelectedRegionId(event.target.value as RegionId);
   };
 
-  const handleYearChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    setSelectedYear(Number(event.target.value));
+  const handlePeriodChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedPeriod(event.target.value);
   };
 
   const handlePriorityChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
@@ -254,24 +248,6 @@ const HomePage: React.FC = () => {
             </div>
 
             <div className="home-filter-group">
-              <label htmlFor="home-filter-direction">{t('filter_select_direction')}</label>
-              <select
-                id="home-filter-direction"
-                className="home-filter-select"
-                value={selectedPriority}
-                onChange={handlePriorityChange}
-                disabled={isFiltersLoading}
-              >
-                <option value="">{t('filter_select_direction')}</option>
-                {dashboardFilters.priority.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="home-filter-group">
               <label htmlFor="home-filter-organization">{t('filter_select_organization')}</label>
               <select
                 id="home-filter-organization"
@@ -311,10 +287,17 @@ const HomePage: React.FC = () => {
 
             <div className="home-filter-group">
               <label htmlFor="home-filter-year">{t('filter_year_range')}</label>
-              <select id="home-filter-year" className="home-filter-select" value={selectedYear} onChange={handleYearChange}>
-                {yearOptions.map((year) => (
-                  <option key={year} value={year}>
-                    {year}
+              <select
+                id="home-filter-year"
+                className="home-filter-select"
+                value={selectedPeriod}
+                onChange={handlePeriodChange}
+                disabled={isFiltersLoading}
+              >
+                <option value="">{t('filter_all_periods')}</option>
+                {dashboardFilters.period.map((option) => (
+                  <option key={`period-${option.value}`} value={option.value}>
+                    {option.label}
                   </option>
                 ))}
               </select>

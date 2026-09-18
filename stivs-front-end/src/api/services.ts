@@ -363,14 +363,22 @@ export const dashboardApi = {
 
     const priority = toDashboardFilterList(payload.priority);
     const applicant = toDashboardFilterList(payload.applicant ?? payload.organization);
+    const period = toDashboardFilterList(payload.period);
 
     return {
       priority,
       applicant,
+      period,
     } as DashboardFilterOptions;
   },
 
-  summary(query?: { priority?: string; organization?: string; region?: string; year?: number }) {
+  summary(query?: {
+    priority?: string;
+    organization?: string;
+    region?: string;
+    startYear?: number;
+    endYear?: number;
+  }) {
     return apiRequest<DashboardSummary>(withQuery('/api/dashboard/summary', query));
   },
 };

@@ -215,6 +215,7 @@ export interface DashboardFilterOption {
 export interface DashboardFilterOptions {
   priority: DashboardFilterOption[];
   applicant: DashboardFilterOption[];
+  period: DashboardFilterOption[];
 }
 
 export interface DashboardSummary {
