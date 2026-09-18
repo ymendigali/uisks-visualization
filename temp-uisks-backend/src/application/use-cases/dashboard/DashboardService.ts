@@ -4,7 +4,8 @@ import { MAX_LIMIT } from "../../ports/Pagination";
 
 type DashboardSummaryFilters = {
   region?: string;
-  year?: number;
+  startYear?: number;
+  endYear?: number;
   priority?: string;
   organization?: string;
 };
@@ -13,7 +14,7 @@ type DashboardFilterOptions = {
   priority: string[];
   organization: string[];
   region: string[];
-  year: number[];
+  period: string[];
 };
 
 const normalize = (value: string): string => value.trim().toLowerCase();
@@ -165,14 +166,21 @@ const parseYearRangeFromPeriod = (period: string): { startYear: number | null; e
   };
 };
 
-const overlapsYear = (startYear: number | null, endYear: number | null, year?: number): boolean => {
-  if (!year) {
+const formatPeriod = (startYear: number, endYear: number): string => `${startYear}-${endYear}`;
+
+const matchesPeriod = (
+  startYear: number | null,
+  endYear: number | null,
+  filterStartYear?: number,
+  filterEndYear?: number
+): boolean => {
+  if (!filterStartYear || !filterEndYear) {
     return true;
   }
   if (!startYear || !endYear) {
-    return true;
+    return false;
   }
-  return startYear <= year && endYear >= year;
+  return startYear === filterStartYear && endYear === filterEndYear;
 };
 
 const detectFinancingType = (tags: string[], fallback?: string): "grant" | "program" | "contract" | "other" => {
@@ -245,7 +253,7 @@ export class DashboardService {
     const priorities = new Set<string>();
     const organizations = new Set<string>();
     const regions = new Set<string>();
-    const years = new Set<number>();
+    const periods = new Map<string, { startYear: number; endYear: number }>();
 
     for (const project of projects) {
       const excelData = toRecord(project.excelData);
@@ -270,9 +278,7 @@ export class DashboardService {
       const endYear = project.endYear ?? parseYear(project.endDate) ?? periodRange.endYear ?? startYear;
 
       if (startYear && endYear && endYear >= startYear) {
-        for (let currentYear = startYear; currentYear <= endYear; currentYear += 1) {
-          years.add(currentYear);
-        }
+        periods.set(formatPeriod(startYear, endYear), { startYear, endYear });
       }
     }
 
@@ -280,12 +286,14 @@ export class DashboardService {
       priority: sortUniqueStrings(priorities),
       organization: sortUniqueStrings(organizations),
       region: sortUniqueStrings(regions),
-      year: Array.from(years).sort((a, b) => a - b)
+      period: Array.from(periods.values())
+        .sort((a, b) => a.startYear - b.startYear || a.endYear - b.endYear)
+        .map(({ startYear, endYear }) => formatPeriod(startYear, endYear))
     };
   }
 
   async getSummary(filters: DashboardSummaryFilters = {}): Promise<DashboardSummary> {
-    const { region, year, priority, organization } = filters;
+    const { region, startYear: filterStartYear, endYear: filterEndYear, priority, organization } = filters;
 
     const allProjects = (await this.listAllProjects()).filter((item) =>
       matchesRegion(item.region, region)
@@ -308,7 +316,7 @@ export class DashboardService {
       const periodRange = parseYearRangeFromPeriod(pickExcelString(excelData, ["Период реализации"]));
       const startYear = project.startYear ?? parseYear(project.startDate) ?? periodRange.startYear;
       const endYear = project.endYear ?? parseYear(project.endDate) ?? periodRange.endYear ?? startYear;
-      return overlapsYear(startYear, endYear, year);
+      return matchesPeriod(startYear, endYear, filterStartYear, filterEndYear);
     });
 
     const budgetsByYearKeys = [
@@ -377,9 +385,9 @@ export class DashboardService {
         durationCount += 1;
       }
 
-      if (year && startYear) {
-        const index = year - startYear;
-        if (index >= 0 && index < budgetsByYearKeys.length) {
+      if (filterStartYear && filterEndYear && startYear === filterStartYear) {
+        const yearsInPeriod = filterEndYear - filterStartYear + 1;
+        for (let index = 0; index < yearsInPeriod && index < budgetsByYearKeys.length; index += 1) {
           selectedYearBudgetRaw += pickExcelNumber(excelData, [budgetsByYearKeys[index]]);
         }
       }
@@ -406,7 +414,7 @@ export class DashboardService {
       byRegionMap.set(regionKey, regionBucket);
     }
 
-    if (!year) {
+    if (!filterStartYear || !filterEndYear) {
       selectedYearBudgetRaw = projects.reduce((sum, project) => sum + Math.max(project.spent, 0), 0);
     }
 

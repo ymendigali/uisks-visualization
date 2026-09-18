@@ -17,7 +17,8 @@ export const buildDashboardRoutes = (dashboardService: DashboardService): Router
     "/summary",
     asyncHandler(async (req, res) => {
       const region = req.query.region?.toString();
-      const yearRaw = req.query.year ? Number(req.query.year) : undefined;
+      const startYearRaw = req.query.startYear ? Number(req.query.startYear) : undefined;
+      const endYearRaw = req.query.endYear ? Number(req.query.endYear) : undefined;
       const priority =
         req.query.priority?.toString() ??
         req.query.direction?.toString() ??
@@ -31,7 +32,8 @@ export const buildDashboardRoutes = (dashboardService: DashboardService): Router
 
       const summary = await dashboardService.getSummary({
         region,
-        year: Number.isFinite(yearRaw) ? yearRaw : undefined,
+        startYear: Number.isFinite(startYearRaw) ? startYearRaw : undefined,
+        endYear: Number.isFinite(endYearRaw) ? endYearRaw : undefined,
         priority,
         organization
       });
