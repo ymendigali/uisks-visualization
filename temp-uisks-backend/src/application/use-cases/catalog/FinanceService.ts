@@ -291,13 +291,17 @@ export class FinanceService {
 
     let totalBudget = 0;
     let totalSpent = 0;
+    let grantsCount = 0;
+    let programsCount = 0;
+    let cofinancingTotal = 0;
 
     const byCategoryMap = new Map<string, number>([
       ["salary", 0],
       ["travel", 0],
       ["support", 0],
       ["materials", 0],
-      ["rent", 0]
+      ["rent", 0],
+      ["other", 0]
     ]);
 
     const byRegionMap = new Map<string, number>();
@@ -337,6 +341,12 @@ export class FinanceService {
         amount: pickExcelNumber(excelData, keys) * budgetShare
       }));
 
+      // The 5 named cost items don't come with their own "other" column in the source
+      // data — whatever is left of the project's own approved budget after those 5 is
+      // shown as "Иные расходы" instead of being silently dropped.
+      const knownCategoryTotal = categoryValues.reduce((sum, entry) => sum + Math.max(entry.amount, 0), 0);
+      categoryValues.push({ key: "other", amount: Math.max(projectBudget - knownCategoryTotal, 0) });
+
       if (expenseFilter.length > 0 && !categoryValues.some((entry) => expenseFilter.includes(normalize(entry.key)) && entry.amount > 0)) {
         totalBudget -= projectBudget;
         totalSpent -= Math.max(project.spent, projectBudget * 0.65);
@@ -349,6 +359,15 @@ export class FinanceService {
 
       const regionName = project.region || "—";
       byRegionMap.set(regionName, (byRegionMap.get(regionName) ?? 0) + projectBudget);
+
+      const financingTypeNormalized = normalize(project.financingType ?? "");
+      if (/грант|grant/.test(financingTypeNormalized)) {
+        grantsCount += 1;
+      } else if (/программ|целев|program|пцф/.test(financingTypeNormalized)) {
+        programsCount += 1;
+      }
+
+      cofinancingTotal += pickExcelNumber(excelData, ["Сумма софинансирования"]) * budgetShare;
     }
 
     const rawCategories = Array.from(byCategoryMap.entries()).map(([category, amount]) => ({ category, amount }));
@@ -366,6 +385,9 @@ export class FinanceService {
     return {
       totalBudget: Number(totalBudget.toFixed(2)),
       totalSpent: Number(totalSpent.toFixed(2)),
+      grantsCount,
+      programsCount,
+      cofinancingTotal: Number(cofinancingTotal.toFixed(2)),
       byCategory,
       byRegion
     };
@@ -419,7 +441,7 @@ export class FinanceService {
       irn: sortUniqueStrings(irn),
       financingType: sortUniqueStrings(financingType),
       cofinancing: sortUniqueStrings(cofinancing),
-      expense: Object.keys(EXPENSE_CATEGORY_KEYS),
+      expense: [...Object.keys(EXPENSE_CATEGORY_KEYS), "other"],
       priority: sortUniqueStrings(priority),
       competition: sortUniqueStrings(competition),
       applicant: sortUniqueStrings(applicant),

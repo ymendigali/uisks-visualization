@@ -4,6 +4,8 @@ export interface DashboardRegionSummary {
   publications: number;
   employees: number;
   budget: number;
+  grants: number;
+  programs: number;
 }
 
 export interface DashboardSummary {
@@ -29,7 +31,8 @@ export interface DashboardSummary {
     docents: number;
     professors: number;
     associateProfessors: number;
-    avgAge: number;
+    femaleSharePercent: number;
+    maleSharePercent: number;
   };
   finances: {
     total: number;

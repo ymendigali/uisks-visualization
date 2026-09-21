@@ -824,6 +824,9 @@ export class LegacyFinanceRepository implements FinanceRepository {
     return {
       totalBudget,
       totalSpent,
+      grantsCount: 0,
+      programsCount: 0,
+      cofinancingTotal: 0,
       byCategory,
       byRegion: []
     };

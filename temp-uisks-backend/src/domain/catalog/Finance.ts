@@ -15,6 +15,9 @@ export interface FinanceProject {
 export interface FinanceSummary {
   totalBudget: number;
   totalSpent: number;
+  grantsCount: number;
+  programsCount: number;
+  cofinancingTotal: number;
   byCategory: Array<{ category: string; amount: number }>;
   byRegion: Array<{ region: string; amount: number }>;
 }

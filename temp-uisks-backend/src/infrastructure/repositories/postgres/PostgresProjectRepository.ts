@@ -78,6 +78,65 @@ const firstNonEmpty = (values: unknown[]): string => {
   return "";
 };
 
+// Raw "Тип финансирования"/"Тип конкурса" values can be many differently worded
+// contest names (e.g. specific grant-round titles). The filter groups them into
+// three canonical buckets by keyword instead of listing every raw variant.
+type FinancingBucket = "grant" | "program" | "commercialization";
+
+const FINANCING_BUCKET_ORDER: FinancingBucket[] = ["grant", "program", "commercialization"];
+
+const FINANCING_BUCKET_LABELS: Record<FinancingBucket, string> = {
+  grant: "Грантовое",
+  program: "Программно-целевое",
+  commercialization: "Коммерциализация РННТД"
+};
+
+const FINANCING_LABEL_TO_BUCKET: Record<string, FinancingBucket> = Object.fromEntries(
+  (Object.entries(FINANCING_BUCKET_LABELS) as [FinancingBucket, string][]).map(([bucket, label]) => [
+    normalize(label),
+    bucket
+  ])
+);
+
+const classifyFinancingBucket = (value: string): FinancingBucket | null => {
+  const normalized = normalize(value);
+  if (!normalized) {
+    return null;
+  }
+  if (/коммерциализ|рннтд/.test(normalized)) {
+    return "commercialization";
+  }
+  if (/грант|grant|\bгф\b/.test(normalized)) {
+    return "grant";
+  }
+  if (/программ|целев|program|пцф/.test(normalized)) {
+    return "program";
+  }
+  return null;
+};
+
+const financingBucketOptions = (values: string[]): string[] => {
+  const present = new Set(
+    values.map((value) => classifyFinancingBucket(value)).filter((bucket): bucket is FinancingBucket => bucket !== null)
+  );
+  return FINANCING_BUCKET_ORDER.filter((bucket) => present.has(bucket)).map((bucket) => FINANCING_BUCKET_LABELS[bucket]);
+};
+
+const financingBucketCounts = (values: string[]): FilterOptionCountString[] => {
+  const counts = new Map<FinancingBucket, number>();
+  for (const value of values) {
+    const bucket = classifyFinancingBucket(value);
+    if (!bucket) {
+      continue;
+    }
+    counts.set(bucket, (counts.get(bucket) ?? 0) + 1);
+  }
+  return FINANCING_BUCKET_ORDER.filter((bucket) => counts.has(bucket)).map((bucket) => ({
+    value: FINANCING_BUCKET_LABELS[bucket],
+    count: counts.get(bucket) ?? 0
+  }));
+};
+
 const pickExcelValue = (excelData: Record<string, unknown>, keys: string[]): string => {
   for (const key of keys) {
     const direct = toStringValue(excelData[key]);
@@ -256,7 +315,7 @@ export class PostgresProjectRepository implements ProjectRepository {
       irn: sortUniqueStrings(projects.map((project) => project.id)),
       status: sortUniqueStrings(projects.map((project) => project.status)),
       region: sortUniqueStrings(projects.map((project) => project.region)),
-      financingType: sortUniqueStrings(financingValues),
+      financingType: financingBucketOptions(financingValues),
       priority: sortUniqueStrings(priorityValues),
       applicant: sortUniqueStrings(projects.map((project) => project.lead)),
       contest: sortUniqueStrings(projects.map((project) => toStringValue(project.contest)).filter(Boolean)),
@@ -281,7 +340,7 @@ export class PostgresProjectRepository implements ProjectRepository {
       irn: toCountedStrings(projects.map((project) => project.id)),
       status: toCountedStrings(projects.map((project) => project.status)),
       region: toCountedStrings(projects.map((project) => project.region)),
-      financingType: toCountedStrings(financingValues),
+      financingType: financingBucketCounts(financingValues),
       priority: toCountedStrings(priorityValues),
       applicant: toCountedStrings(projects.map((project) => project.lead)),
       contest: toCountedStrings(projects.map((project) => toStringValue(project.contest)).filter(Boolean)),
@@ -448,8 +507,15 @@ export class PostgresProjectRepository implements ProjectRepository {
       if (regionFilter && !matchesRegion(project.region, regionFilter)) {
         return false;
       }
-      if (financingTypeFilter && !project.tags.some((tag) => contains(tag, financingTypeFilter))) {
-        return false;
+      if (financingTypeFilter) {
+        const filterBucket =
+          FINANCING_LABEL_TO_BUCKET[normalize(financingTypeFilter)] ?? classifyFinancingBucket(financingTypeFilter);
+        const matchesBucket = filterBucket
+          ? classifyFinancingBucket(project.financingType ?? project.tags.join(" ")) === filterBucket
+          : project.tags.some((tag) => contains(tag, financingTypeFilter));
+        if (!matchesBucket) {
+          return false;
+        }
       }
       if (priorityFilter && !project.tags.some((tag) => contains(tag, priorityFilter))) {
         return false;

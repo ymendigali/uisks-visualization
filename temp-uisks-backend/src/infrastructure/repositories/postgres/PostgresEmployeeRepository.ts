@@ -224,7 +224,7 @@ export class PostgresEmployeeRepository implements EmployeeRepository {
           researcherIdWos: cleanText(row.researcher_id_wos),
           orcid: cleanText(row.orcid),
           age: 0,
-          affiliateType: "Не указано",
+          affiliateType: cleanText(row.department),
           gender: cleanText(row.gender),
           citizenship: cleanText(row.citizenship),
           projectRole: cleanText(row.project_role),

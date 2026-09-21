@@ -343,7 +343,10 @@ export class DashboardService {
 
     const uniquePeople = new Set<string>();
 
-    const byRegionMap = new Map<string, { projects: number; employees: Set<string>; publications: number; budgetRaw: number }>();
+    const byRegionMap = new Map<
+      string,
+      { projects: number; employees: Set<string>; publications: number; budgetRaw: number; grants: number; programs: number }
+    >();
 
     for (const project of projects) {
       const excelData = toRecord(project.excelData);
@@ -402,12 +405,19 @@ export class DashboardService {
         projects: 0,
         employees: new Set<string>(),
         publications: 0,
-        budgetRaw: 0
+        budgetRaw: 0,
+        grants: 0,
+        programs: 0
       };
 
       regionBucket.projects += 1;
       regionBucket.publications += projectTotalPublications;
       regionBucket.budgetRaw += budgetRaw;
+      if (financingType === "grant") {
+        regionBucket.grants += 1;
+      } else if (financingType === "program") {
+        regionBucket.programs += 1;
+      }
       if (leader) {
         regionBucket.employees.add(leader);
       }
@@ -435,8 +445,20 @@ export class DashboardService {
     let doctors = 0;
     let candidates = 0;
     let masters = 0;
+    let femaleCount = 0;
+    let maleCount = 0;
+    let genderKnownCount = 0;
 
     for (const employee of employees.items) {
+      const gender = normalize(toStringValue(employee.metrics["gender"]));
+      if (/жен|female/.test(gender)) {
+        femaleCount += 1;
+        genderKnownCount += 1;
+      } else if (/муж|male/.test(gender)) {
+        maleCount += 1;
+        genderKnownCount += 1;
+      }
+
       const degree = toStringValue(employee.metrics["academicDegree"]);
       if (!degree) {
         continue;
@@ -458,7 +480,9 @@ export class DashboardService {
         projects: value.projects,
         employees: value.employees.size,
         publications: value.publications,
-        budget: Number((value.budgetRaw / 1_000_000_000).toFixed(2))
+        budget: Number((value.budgetRaw / 1_000_000_000).toFixed(2)),
+        grants: value.grants,
+        programs: value.programs
       }))
       .sort((a, b) => b.projects - a.projects);
 
@@ -488,17 +512,16 @@ export class DashboardService {
         docents: doctors,
         professors: candidates,
         associateProfessors: masters,
-        // No birth date/age field exists anywhere in the imported project or employee data,
-        // so there is nothing to average — left at 0 until that data is collected.
-        avgAge: 0
+        femaleSharePercent: genderKnownCount ? Number(((femaleCount / genderKnownCount) * 100).toFixed(1)) : 0,
+        maleSharePercent: genderKnownCount ? Number(((maleCount / genderKnownCount) * 100).toFixed(1)) : 0
       },
       finances: {
         total: Number(totalBudget.toFixed(2)),
         lastYear: Number(lastYear.toFixed(2)),
-        // In thousand KZT, matching the "unit_thousand_tg" label on the frontend card.
-        // (lastYear is already scaled to billions, so dividing by project count there
-        // rounds every project down to 0 - use the raw pre-scaling amount instead.)
-        avgExpense: projects.length ? Number((selectedYearBudgetRaw / projects.length / 1000).toFixed(0)) : 0,
+        // Average of each project's own approved total budget ("Общая одобренная сумма"),
+        // in thousand KZT, matching the "unit_thousand_tg" label on the frontend card —
+        // independent of the selected-period budget estimate used for `lastYear`.
+        avgExpense: projects.length ? Number((totalBudgetRaw / projects.length / 1000).toFixed(0)) : 0,
         budgetUsage: totalBudget > 0 ? Number(((lastYear / totalBudget) * 100).toFixed(1)) : 0,
         regionalPrograms: byRegion.length
       },
