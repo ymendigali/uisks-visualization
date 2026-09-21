@@ -64,6 +64,8 @@
   fill: rgba(37, 99, 235, 0.92);
   stroke: #e0f2fe;
   stroke-width: 2;
+  transform-box: fill-box;
+  transform-origin: center;
   transition: fill 0.2s ease, transform 0.2s ease, stroke 0.2s ease;
 }
 

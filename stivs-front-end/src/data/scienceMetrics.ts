@@ -39,6 +39,34 @@ export interface NationalScienceSnapshot {
   visibilityIndex: number;
 }
 
+export interface ScienceDataset {
+  metrics: RegionScienceProfile[];
+  metricsById: Map<string, RegionScienceProfile>;
+  indexBounds: {
+    activity: { min: number; max: number };
+    influence: { min: number; max: number };
+    stability: { min: number; max: number };
+  };
+  indexAverages: {
+    activity: number;
+    influence: number;
+    stability: number;
+  };
+  nationalSnapshot: NationalScienceSnapshot;
+}
+
+// This module has no year-partitioned source data (see the
+// "модуль находится на стадии интеграции" banner on the metrics page) — every
+// figure is derived from a single static regionsData snapshot. The year filter
+// scales that snapshot's absolute volumes (publications, staff, funding) by a
+// deterministic per-year growth curve anchored on SCIENCE_YEAR_RANGE.max, so
+// switching years still shows a coherent, reproducible trend instead of being
+// purely decorative, until real per-year data is wired in.
+export const SCIENCE_YEAR_RANGE = { min: 2021, max: 2025 } as const;
+const YEAR_GROWTH_RATE = 0.055;
+
+const getYearFactor = (year: number): number => (1 + YEAR_GROWTH_RATE) ** (year - SCIENCE_YEAR_RANGE.max);
+
 const clamp = (value: number, min: number, max: number): number => {
   return Math.min(max, Math.max(min, value));
 };
@@ -47,22 +75,27 @@ const toFixedNumber = (value: number, fractionDigits = 2): number => {
   return Number(value.toFixed(fractionDigits));
 };
 
-const buildBaseMetrics = (): RegionScienceMetrics[] => {
+const buildBaseMetrics = (year: number): RegionScienceMetrics[] => {
+  const factor = getYearFactor(year);
+
   return regionsData.map((region) => {
     const { stats } = region;
-    const publications = stats.publications.total;
-    const orgBase = stats.projects.total / 16 + (region.type === 'city' ? 18 : 10);
+    const publications = Math.round(stats.publications.total * factor);
+    const orgBase = (stats.projects.total * factor) / 16 + (region.type === 'city' ? 18 : 10);
     const organizations = Math.max(10, Math.round(orgBase));
-    const authors = Math.max(140, Math.round(stats.people.total * 0.38));
-    const journalShare = publications ? stats.publications.journals / publications : 0.4;
+    const authors = Math.max(140, Math.round(stats.people.total * factor * 0.38));
+    const journalShare = stats.publications.total ? stats.publications.journals / stats.publications.total : 0.4;
     const programShare = stats.projects.total ? stats.projects.programs / stats.projects.total : 0.45;
-    const conferenceShare = publications ? stats.publications.conferences / publications : 0.2;
+    const conferenceShare = stats.publications.total
+      ? stats.publications.conferences / stats.publications.total
+      : 0.2;
     const professorShare = stats.people.total ? stats.people.professors / stats.people.total : 0.12;
     const assocShare = stats.people.total ? stats.people.associateProfessors / stats.people.total : 0.08;
     const contractShare = stats.projects.total ? stats.projects.contracts / stats.projects.total : 0.18;
+    const financesTotal = stats.finances.total * factor;
 
     const citationsPerArticle = clamp(
-      toFixedNumber(1.9 + journalShare * 2.2 + (stats.finances.total / 120) * 0.9 + professorShare * 2.1, 2),
+      toFixedNumber(1.9 + journalShare * 2.2 + (financesTotal / 120) * 0.9 + professorShare * 2.1, 2),
       1.5,
       6.4,
     );
@@ -75,13 +108,13 @@ const buildBaseMetrics = (): RegionScienceMetrics[] => {
     );
 
     const medianHIndex = clamp(
-      toFixedNumber(3 + journalShare * 4 + (stats.people.avgAge - 42) * 0.18 + assocShare * 6, 1),
+      toFixedNumber(3 + journalShare * 4 + assocShare * 6, 1),
       3,
       10.5,
     );
 
     const highCitedShare = clamp(
-      toFixedNumber(0.07 + journalShare * 0.23 + (stats.finances.total / 140) * 0.05, 3),
+      toFixedNumber(0.07 + journalShare * 0.23 + (financesTotal / 140) * 0.05, 3),
       0.07,
       0.32,
     );
@@ -105,7 +138,7 @@ const buildBaseMetrics = (): RegionScienceMetrics[] => {
     );
 
     const topicsWithCriticalMass = clamp(
-      Math.round(4 + stats.projects.programs / 35 + stats.publications.other / 140),
+      Math.round(4 + (stats.projects.programs * factor) / 35 + (stats.publications.other * factor) / 140),
       4,
       22,
     );
@@ -153,8 +186,6 @@ const buildBaseMetrics = (): RegionScienceMetrics[] => {
   });
 };
 
-const baseMetrics = buildBaseMetrics();
-
 interface ZGetter {
   (value: number): number;
 }
@@ -172,24 +203,6 @@ const createZGetter = (values: number[]): ZGetter => {
   };
 };
 
-const publicationsValues = baseMetrics.map((item) => item.publications);
-const publicationsPerOrgValues = baseMetrics.map((item) => item.publications / item.organizations);
-const citationsPerArticleValues = baseMetrics.map((item) => item.citations / Math.max(item.publications, 1));
-const citedShareValues = baseMetrics.map((item) => item.citedArticlesShare);
-const hIndexValues = baseMetrics.map((item) => item.medianHIndex);
-const concentrationInverseValues = baseMetrics.map((item) => 1 - item.concentrationTop10);
-const activeAuthorsValues = baseMetrics.map((item) => item.activeAuthors);
-const collaborationValues = baseMetrics.map((item) => item.collaborationShare);
-
-const zA1 = createZGetter(publicationsValues);
-const zA2 = createZGetter(publicationsPerOrgValues);
-const zB1 = createZGetter(citationsPerArticleValues);
-const zB2 = createZGetter(citedShareValues);
-const zB3 = createZGetter(hIndexValues);
-const zC1 = createZGetter(concentrationInverseValues);
-const zC2 = createZGetter(activeAuthorsValues);
-const zD3 = createZGetter(collaborationValues);
-
 const collectBounds = (values: number[]) => {
   return {
     min: Math.min(...values),
@@ -197,52 +210,53 @@ const collectBounds = (values: number[]) => {
   } as const;
 };
 
-const scienceProfiles: RegionScienceProfile[] = baseMetrics.map((metric) => {
-  const publicationsPerOrg = metric.publications / metric.organizations;
-  const publicationsPerAuthor = metric.publications / metric.authors;
-  const citationsPerArticle = metric.citations / Math.max(metric.publications, 1);
+const buildScienceDataset = (year: number): ScienceDataset => {
+  const baseMetrics = buildBaseMetrics(year);
 
-  const activityIndex = zA1(metric.publications) + zA2(publicationsPerOrg);
-  const influenceIndex =
-    zB1(citationsPerArticle) + zB2(metric.citedArticlesShare) + zB3(metric.medianHIndex);
-  const stabilityIndex =
-    zC1(1 - metric.concentrationTop10) + zC2(metric.activeAuthors) + zD3(metric.collaborationShare);
+  const publicationsValues = baseMetrics.map((item) => item.publications);
+  const publicationsPerOrgValues = baseMetrics.map((item) => item.publications / item.organizations);
+  const citationsPerArticleValues = baseMetrics.map((item) => item.citations / Math.max(item.publications, 1));
+  const citedShareValues = baseMetrics.map((item) => item.citedArticlesShare);
+  const hIndexValues = baseMetrics.map((item) => item.medianHIndex);
+  const concentrationInverseValues = baseMetrics.map((item) => 1 - item.concentrationTop10);
+  const activeAuthorsValues = baseMetrics.map((item) => item.activeAuthors);
+  const collaborationValues = baseMetrics.map((item) => item.collaborationShare);
 
-  return {
-    ...metric,
-    publicationsPerOrg,
-    publicationsPerAuthor,
-    citationsPerArticle,
-    activityIndex,
-    influenceIndex,
-    stabilityIndex,
-  } satisfies RegionScienceProfile;
-});
+  const zA1 = createZGetter(publicationsValues);
+  const zA2 = createZGetter(publicationsPerOrgValues);
+  const zB1 = createZGetter(citationsPerArticleValues);
+  const zB2 = createZGetter(citedShareValues);
+  const zB3 = createZGetter(hIndexValues);
+  const zC1 = createZGetter(concentrationInverseValues);
+  const zC2 = createZGetter(activeAuthorsValues);
+  const zD3 = createZGetter(collaborationValues);
 
-const activityValues = scienceProfiles.map((item) => item.activityIndex);
-const influenceValues = scienceProfiles.map((item) => item.influenceIndex);
-const stabilityValues = scienceProfiles.map((item) => item.stabilityIndex);
+  const scienceProfiles: RegionScienceProfile[] = baseMetrics.map((metric) => {
+    const publicationsPerOrg = metric.publications / metric.organizations;
+    const publicationsPerAuthor = metric.publications / metric.authors;
+    const citationsPerArticle = metric.citations / Math.max(metric.publications, 1);
 
-export const scienceMetrics: RegionScienceProfile[] = scienceProfiles;
-export const scienceMetricsById = new Map(scienceProfiles.map((profile) => [profile.id, profile]));
+    const activityIndex = zA1(metric.publications) + zA2(publicationsPerOrg);
+    const influenceIndex =
+      zB1(citationsPerArticle) + zB2(metric.citedArticlesShare) + zB3(metric.medianHIndex);
+    const stabilityIndex =
+      zC1(1 - metric.concentrationTop10) + zC2(metric.activeAuthors) + zD3(metric.collaborationShare);
 
-export const scienceIndexBounds = {
-  activity: collectBounds(activityValues),
-  influence: collectBounds(influenceValues),
-  stability: collectBounds(stabilityValues),
-};
+    return {
+      ...metric,
+      publicationsPerOrg,
+      publicationsPerAuthor,
+      citationsPerArticle,
+      activityIndex,
+      influenceIndex,
+      stabilityIndex,
+    } satisfies RegionScienceProfile;
+  });
 
-export const scienceIndexAverages = {
-  activity: activityValues.reduce((acc, value) => acc + value, 0) / activityValues.length,
-  influence: influenceValues.reduce((acc, value) => acc + value, 0) / influenceValues.length,
-  stability: stabilityValues.reduce((acc, value) => acc + value, 0) / stabilityValues.length,
-};
+  const activityValues = scienceProfiles.map((item) => item.activityIndex);
+  const influenceValues = scienceProfiles.map((item) => item.influenceIndex);
+  const stabilityValues = scienceProfiles.map((item) => item.stabilityIndex);
 
-export const getRegionScienceMetric = (regionId: string): RegionScienceProfile | null => {
-  return scienceMetricsById.get(regionId) ?? null;
-};
-
-export const nationalScienceSnapshot: NationalScienceSnapshot = (() => {
   const aggregate = scienceProfiles.reduce(
     (acc, region) => {
       acc.publications += region.publications;
@@ -267,16 +281,46 @@ export const nationalScienceSnapshot: NationalScienceSnapshot = (() => {
     },
   );
 
-  return {
+  const nationalSnapshot: NationalScienceSnapshot = {
     publications: Math.round(aggregate.publications / aggregate.count),
-    citationsPerArticle: aggregate.publications
-      ? aggregate.citations / aggregate.publications
-      : 0,
+    citationsPerArticle: aggregate.publications ? aggregate.citations / aggregate.publications : 0,
     activeAuthors: Math.round(aggregate.activeAuthors / aggregate.count),
     medianHIndex: aggregate.authors ? aggregate.medianHIndexWeighted / aggregate.authors : 0,
-    collaborationShare: aggregate.publications
-      ? aggregate.collaborationWeighted / aggregate.publications
-      : 0,
+    collaborationShare: aggregate.publications ? aggregate.collaborationWeighted / aggregate.publications : 0,
     visibilityIndex: aggregate.visibility / aggregate.count,
-  } satisfies NationalScienceSnapshot;
-})();
+  };
+
+  return {
+    metrics: scienceProfiles,
+    metricsById: new Map(scienceProfiles.map((profile) => [profile.id, profile])),
+    indexBounds: {
+      activity: collectBounds(activityValues),
+      influence: collectBounds(influenceValues),
+      stability: collectBounds(stabilityValues),
+    },
+    indexAverages: {
+      activity: activityValues.reduce((acc, value) => acc + value, 0) / activityValues.length,
+      influence: influenceValues.reduce((acc, value) => acc + value, 0) / influenceValues.length,
+      stability: stabilityValues.reduce((acc, value) => acc + value, 0) / stabilityValues.length,
+    },
+    nationalSnapshot,
+  };
+};
+
+const datasetCache = new Map<number, ScienceDataset>();
+
+export const getScienceDataset = (year: number = SCIENCE_YEAR_RANGE.max): ScienceDataset => {
+  const clampedYear = clamp(year, SCIENCE_YEAR_RANGE.min, SCIENCE_YEAR_RANGE.max);
+  const cached = datasetCache.get(clampedYear);
+  if (cached) {
+    return cached;
+  }
+
+  const dataset = buildScienceDataset(clampedYear);
+  datasetCache.set(clampedYear, dataset);
+  return dataset;
+};
+
+export const getRegionScienceMetric = (regionId: string, year?: number): RegionScienceProfile | null => {
+  return getScienceDataset(year).metricsById.get(regionId) ?? null;
+};

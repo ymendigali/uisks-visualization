@@ -17,7 +17,7 @@ import {
   type ChartData,
 } from 'chart.js';
 import KazakhstanMap from '../components/Home/KazakhstanMap';
-import { useRegionContext } from '../context/RegionContext';
+import { useLocalRegionSelection } from '../hooks/useLocalRegionSelection';
 import type { RegionId } from '../context/RegionContext';
 import { formatNumber } from '../utils/metrics';
 import './PublicationsPage.css';
@@ -273,7 +273,7 @@ const filterSelect = (
 
 const PublicationsPage: React.FC = () => {
   const { t } = useTranslation();
-  const { selectedRegion, selectedRegionId, setSelectedRegionId, regions } = useRegionContext();
+  const { selectedRegion, selectedRegionId, setSelectedRegionId, regions } = useLocalRegionSelection();
   const [filters, setFilters] = useState<FilterState>(defaultFilters);
 
   const {

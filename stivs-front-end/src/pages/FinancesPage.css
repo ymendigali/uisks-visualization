@@ -744,6 +744,22 @@
   color: var(--color-text-muted);
 }
 
+.finances-trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-weight: 700;
+  font-size: 0.88rem;
+}
+
+.finances-trend--up {
+  color: #16a34a;
+}
+
+.finances-trend--down {
+  color: #dc2626;
+}
+
 .finances-top tbody tr:last-of-type td,
 .finances-comparison tbody tr:last-of-type td {
   border-bottom: none;

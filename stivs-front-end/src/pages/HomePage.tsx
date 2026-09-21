@@ -10,7 +10,7 @@ import './HomePage.css';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../api/client';
 import { dashboardApi } from '../api/services';
-import type { DashboardFilterOptions, DashboardSummary } from '../api/types';
+import type { DashboardFilterOptions, DashboardRegionSummary, DashboardSummary } from '../api/types';
 import PageLoader from '../components/PageLoader/PageLoader';
 
 const HomePage: React.FC = () => {
@@ -28,6 +28,7 @@ const HomePage: React.FC = () => {
   const [selectedPeriod, setSelectedPeriod] = useState<string>('');
   const [selectedPriority, setSelectedPriority] = useState<string>('');
   const [selectedOrganization, setSelectedOrganization] = useState<string>('');
+  const [regionBreakdown, setRegionBreakdown] = useState<DashboardRegionSummary[]>([]);
 
   useEffect(() => {
     const loadDashboardFilters = async () => {
@@ -95,6 +96,76 @@ const HomePage: React.FC = () => {
     void loadDashboardSummary();
   }, [selectedOrganization, selectedPriority, selectedRegion?.name, selectedPeriod]);
 
+  useEffect(() => {
+    const loadRegionBreakdown = async () => {
+      try {
+        const [periodStart, periodEnd] = selectedPeriod ? selectedPeriod.split('-').map(Number) : [];
+        const summary = await dashboardApi.summary({
+          priority: asDashboardFilterParam(selectedPriority),
+          organization: asDashboardFilterParam(selectedOrganization),
+          region: 'all',
+          startYear: Number.isFinite(periodStart) ? periodStart : undefined,
+          endYear: Number.isFinite(periodEnd) ? periodEnd : undefined,
+        });
+        setRegionBreakdown(summary.byRegion);
+      } catch {
+        setRegionBreakdown([]);
+      }
+    };
+
+    void loadRegionBreakdown();
+  }, [selectedOrganization, selectedPriority, selectedPeriod]);
+
+  const normalizeRegionName = (value: string): string =>
+    value
+      .toLowerCase()
+      .replace(/ё/g, 'е')
+      .replace(/ы/g, 'и')
+      .replace(/[.,]/g, ' ')
+      .replace(/(^|\s)(город|гор|г|область|обл)(\s|$)/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  const regionTooltipMap = useMemo(() => {
+    const map = new Map<string, { grants: number; programs: number }>();
+
+    regionsData.forEach((region) => {
+      const normalizedTarget = normalizeRegionName(region.name);
+      const match = regionBreakdown.find((item) => {
+        const normalizedSource = normalizeRegionName(item.region);
+        return (
+          normalizedSource === normalizedTarget ||
+          normalizedSource.includes(normalizedTarget) ||
+          normalizedTarget.includes(normalizedSource)
+        );
+      });
+
+      if (match) {
+        map.set(region.id, { grants: match.grants, programs: match.programs });
+      }
+    });
+
+    return map;
+  }, [regionBreakdown]);
+
+  const getRegionTooltip = (regionId: string): string | undefined => {
+    const region = regionsData.find((item) => item.id === regionId);
+    if (!region) {
+      return undefined;
+    }
+
+    const stats = regionTooltipMap.get(regionId);
+    if (!stats) {
+      return region.name;
+    }
+
+    return t('map_region_tooltip', {
+      name: region.name,
+      grants: formatNumber(stats.grants),
+      programs: formatNumber(stats.programs),
+    });
+  };
+
   const nationalMetrics = useMemo(() => calculateNationalMetrics(), []);
   const metrics = useMemo(() => {
     if (!dashboardSummary) {
@@ -118,6 +189,7 @@ const HomePage: React.FC = () => {
     () => [
       {
         title: t('card_projects_title'),
+        path: '/projects',
         icon: <Cpu size={40} />,
         value: formatNumber(metrics.projects.total),
         unit: t('unit_projects'),
@@ -134,6 +206,7 @@ const HomePage: React.FC = () => {
       },
       {
         title: t('card_publications_title'),
+        path: '/publications',
         icon: <FileText size={40} />,
         value: formatNumber(metrics.publications.total),
         unit: t('unit_publications'),
@@ -148,6 +221,7 @@ const HomePage: React.FC = () => {
       },
       {
         title: t('card_employees_title'),
+        path: '/employees',
         icon: <Users2 size={40} />,
         value: formatNumber(metrics.people.total),
         unit: t('unit_people'),
@@ -155,11 +229,15 @@ const HomePage: React.FC = () => {
           { label: t('card_employees_doctors'), value: formatNumber(metrics.people.docents) },
           { label: t('card_employees_candidates'), value: formatNumber(metrics.people.professors) },
           { label: t('card_employees_masters'), value: formatNumber(metrics.people.associateProfessors) },
-          { label: t('card_employees_h_index_high'), value: metrics.people.avgAge.toFixed(1) },
+          {
+            label: t('card_employees_gender_split'),
+            value: `${metrics.people.femaleSharePercent.toFixed(0)}% / ${metrics.people.maleSharePercent.toFixed(0)}%`,
+          },
         ],
       },
       {
         title: t('card_finances_title'),
+        path: '/finances',
         icon: <DollarSign size={40} />,
         value: formatNumber(metrics.finances.total, { maximumFractionDigits: 1 }),
         unit: t('unit_mlrd_tg'),
@@ -305,7 +383,12 @@ const HomePage: React.FC = () => {
           </section>
 
           <div className="map-panel">
-            <KazakhstanMap selectedRegionId={selectedRegionId} onRegionSelect={handleRegionSelect} />
+            <KazakhstanMap
+              selectedRegionId={selectedRegionId}
+              onRegionSelect={handleRegionSelect}
+              getRegionTooltip={getRegionTooltip}
+              showLabels={false}
+            />
 
             <aside className="map-info">
               <span className="map-tag">
@@ -336,7 +419,7 @@ const HomePage: React.FC = () => {
         ) : (
         <div className="stats-grid">
           {summaryCards.map((stat) => (
-            <article key={stat.title} className="stat-card">
+            <Link key={stat.title} to={stat.path} className="stat-card">
               <div className="stat-icon" aria-hidden="true">
                 {stat.icon}
               </div>
@@ -355,7 +438,7 @@ const HomePage: React.FC = () => {
                   ))}
                 </div>
               </div>
-            </article>
+            </Link>
           ))}
         </div>
         )}

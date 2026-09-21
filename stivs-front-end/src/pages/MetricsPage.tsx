@@ -17,17 +17,13 @@ import type {
   ScriptableContext,
   ScatterDataPoint,
 } from 'chart.js';
-import { SlidersHorizontal, Sparkles, Map as MapIcon, RefreshCcw, CircleHelp } from 'lucide-react';
+import { SlidersHorizontal, Sparkles, Map as MapIcon, RefreshCcw, CircleHelp, Calendar, ChevronDown } from 'lucide-react';
 import KazakhstanMap from '../components/Home/KazakhstanMap';
-import { useRegionContext } from '../context/RegionContext';
+import { useLocalRegionSelection } from '../hooks/useLocalRegionSelection';
 import type { RegionId } from '../context/RegionContext';
 import {
-  scienceMetrics,
-  scienceMetricsById,
-  scienceIndexBounds,
-  scienceIndexAverages,
-  getRegionScienceMetric,
-  nationalScienceSnapshot,
+  getScienceDataset,
+  SCIENCE_YEAR_RANGE,
   type RegionScienceProfile,
 } from '../data/scienceMetrics';
 import { formatNumber } from '../utils/metrics';
@@ -183,13 +179,29 @@ const normalizeIndex = (value: number, bounds: { min: number; max: number }): nu
 
 const MetricsPage: React.FC = () => {
   const { t } = useTranslation();
-  const { selectedRegionId, setSelectedRegionId } = useRegionContext();
+  const { selectedRegionId, setSelectedRegionId } = useLocalRegionSelection();
 
   const [xMetric, setXMetric] = useState<XAxisMetric>('perOrg');
   const [yMetric, setYMetric] = useState<YAxisMetric>('citations');
   const [mapMetric, setMapMetric] = useState<MapMetricKey>('citations');
+  const [selectedYear, setSelectedYear] = useState<number>(SCIENCE_YEAR_RANGE.max);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
   const scatterRef = useRef<ChartJS<'scatter', ScatterPoint[], unknown> | null>(null);
+
+  const dataset = useMemo(() => getScienceDataset(selectedYear), [selectedYear]);
+
+  const yearOptions = useMemo(
+    () =>
+      Array.from(
+        { length: SCIENCE_YEAR_RANGE.max - SCIENCE_YEAR_RANGE.min + 1 },
+        (_, index) => SCIENCE_YEAR_RANGE.max - index,
+      ),
+    [],
+  );
+
+  const handleYearChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedYear(Number(event.target.value));
+  };
 
   const { pointsByType, xMedian, yMedian } = useMemo(() => {
     const grouped: Record<RegionScienceProfile['type'], ScatterPoint[]> = {
@@ -199,7 +211,7 @@ const MetricsPage: React.FC = () => {
     const xValues: number[] = [];
     const yValues: number[] = [];
 
-    scienceMetrics.forEach((metric) => {
+    dataset.metrics.forEach((metric) => {
       const xValue = xMetric === 'perOrg' ? metric.publicationsPerOrg : metric.publicationsPerAuthor;
       const yValue = yMetric === 'citations' ? metric.citationsPerArticle : metric.citedArticlesShare * 100;
 
@@ -228,7 +240,7 @@ const MetricsPage: React.FC = () => {
       xMedian: computeMedian(xValues),
       yMedian: computeMedian(yValues),
     };
-  }, [xMetric, yMetric]);
+  }, [dataset, xMetric, yMetric]);
 
   const scatterDatasets = useMemo<ChartDataset<'scatter', ScatterPoint[]>[]>(() => {
     const datasets = (Object.keys(pointsByType) as Array<RegionScienceProfile['type']>).map((type) => ({
@@ -259,12 +271,12 @@ const MetricsPage: React.FC = () => {
           y: Number(yMedian.toFixed(2)),
           regionId: 'national-median',
           regionName: t('metrics_country_median_label'),
-          publications: nationalScienceSnapshot.publications,
-          citationsPerArticle: nationalScienceSnapshot.citationsPerArticle,
-          medianHIndex: nationalScienceSnapshot.medianHIndex,
-          collaborationShare: nationalScienceSnapshot.collaborationShare,
+          publications: dataset.nationalSnapshot.publications,
+          citationsPerArticle: dataset.nationalSnapshot.citationsPerArticle,
+          medianHIndex: dataset.nationalSnapshot.medianHIndex,
+          collaborationShare: dataset.nationalSnapshot.collaborationShare,
           concentrationTop10: 0,
-          activeAuthors: nationalScienceSnapshot.activeAuthors,
+          activeAuthors: dataset.nationalSnapshot.activeAuthors,
           size: 8,
           type: 'region',
         },
@@ -277,7 +289,7 @@ const MetricsPage: React.FC = () => {
     });
 
     return datasets;
-  }, [pointsByType, selectedRegionId, t, xMedian, yMedian]);
+  }, [dataset, pointsByType, selectedRegionId, t, xMedian, yMedian]);
 
   const scatterData = useMemo(() => ({ datasets: scatterDatasets }), [scatterDatasets]);
 
@@ -425,28 +437,28 @@ const MetricsPage: React.FC = () => {
   );
 
   const mapStats = useMemo(() => {
-    const values = scienceMetrics.map((region) => getMapMetricValue(region, mapMetric));
+    const values = dataset.metrics.map((region) => getMapMetricValue(region, mapMetric));
     const min = Math.min(...values);
     const max = Math.max(...values);
     const median = computeMedian(values);
     return { min, max, median };
-  }, [mapMetric]);
+  }, [dataset, mapMetric]);
 
   const mapFillResolver = useCallback(
     (regionId: string) => {
-      const region = scienceMetricsById.get(regionId);
+      const region = dataset.metricsById.get(regionId);
       if (!region) {
         return undefined;
       }
       const value = getMapMetricValue(region, mapMetric);
       return getChoroplethColor(value, mapStats.min, mapStats.max);
     },
-    [mapMetric, mapStats.max, mapStats.min],
+    [dataset, mapMetric, mapStats.max, mapStats.min],
   );
 
   const countryAverageSnapshot = useMemo(() => {
-    const count = scienceMetrics.length || 1;
-    const totals = scienceMetrics.reduce(
+    const count = dataset.metrics.length || 1;
+    const totals = dataset.metrics.reduce(
       (acc, region) => {
         acc.publications += region.publications;
         acc.citationsPerArticle += region.citationsPerArticle;
@@ -471,14 +483,14 @@ const MetricsPage: React.FC = () => {
       medianHIndex: totals.medianHIndex / count,
       collaborationShare: totals.collaborationShare / count,
     };
-  }, []);
+  }, [dataset]);
 
   const selectedProfile = useMemo(() => {
     if (selectedRegionId === 'national') {
       return null;
     }
-    return getRegionScienceMetric(selectedRegionId);
-  }, [selectedRegionId]);
+    return dataset.metricsById.get(selectedRegionId) ?? null;
+  }, [dataset, selectedRegionId]);
 
   const kpiScopeLabel = selectedProfile?.name ?? t('metrics_kpi_scope_country');
   const kpiSource = selectedProfile ?? countryAverageSnapshot;
@@ -525,7 +537,7 @@ const MetricsPage: React.FC = () => {
         influence: selectedProfile.influenceIndex,
         stability: selectedProfile.stabilityIndex,
       }
-    : scienceIndexAverages;
+    : dataset.indexAverages;
 
   const indexCards = useMemo(
     () => [
@@ -534,24 +546,24 @@ const MetricsPage: React.FC = () => {
         label: t('metrics_index_activity'),
         description: t('metrics_index_activity_description'),
         value: indexSource.activity,
-        bounds: scienceIndexBounds.activity,
+        bounds: dataset.indexBounds.activity,
       },
       {
         key: 'influence',
         label: t('metrics_index_influence'),
         description: t('metrics_index_influence_description'),
         value: indexSource.influence,
-        bounds: scienceIndexBounds.influence,
+        bounds: dataset.indexBounds.influence,
       },
       {
         key: 'stability',
         label: t('metrics_index_stability'),
         description: t('metrics_index_stability_description'),
         value: indexSource.stability,
-        bounds: scienceIndexBounds.stability,
+        bounds: dataset.indexBounds.stability,
       },
     ],
-    [indexSource.activity, indexSource.influence, indexSource.stability, t],
+    [dataset, indexSource.activity, indexSource.influence, indexSource.stability, t],
   );
 
   const handleResetSelection = useCallback(() => {
@@ -598,6 +610,18 @@ const MetricsPage: React.FC = () => {
           <p>{t('metrics_page_description')}</p>
         </div>
         <div className="metrics-header-controls">
+          <div className="metrics-year-select">
+            <Calendar size={16} className="metrics-year-select-icon" />
+            <label htmlFor="metrics-year-select">{t('metrics_year_filter_label')}</label>
+            <select id="metrics-year-select" value={selectedYear} onChange={handleYearChange}>
+              {yearOptions.map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={14} className="metrics-year-select-chevron" aria-hidden="true" />
+          </div>
           <button
             type="button"
             className="metrics-info-button"
@@ -694,7 +718,9 @@ const MetricsPage: React.FC = () => {
         <aside className="metrics-map-card">
           <div className="metrics-map-header">
             <div>
-              <h3>{t('metrics_map_title')}</h3>
+              <h3>
+                {selectedProfile ? selectedProfile.name : t('metrics_map_title')}
+              </h3>
               <p className="metrics-map-current-metric" title={mapMetricConfig[mapMetric].label}>
                 {mapMetricConfig[mapMetric].label}
               </p>
@@ -725,6 +751,7 @@ const MetricsPage: React.FC = () => {
               getRegionFill={mapFillResolver}
               useShortLabels={false}
               showLabels={false}
+              showCityLabels={false}
             />
           </div>
           <div className="metrics-map-legend">

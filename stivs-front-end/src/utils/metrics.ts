@@ -37,7 +37,8 @@ export const calculateNationalMetrics = (
       docents: 0,
       professors: 0,
       associateProfessors: 0,
-      avgAge: 0,
+      femaleSharePercent: 0,
+      maleSharePercent: 0,
     },
     finances: {
       total: 0,
@@ -50,8 +51,9 @@ export const calculateNationalMetrics = (
 
   let durationAccumulator = 0;
   let durationWeight = 0;
-  let ageAccumulator = 0;
-  let ageWeight = 0;
+  let femaleShareAccumulator = 0;
+  let maleShareAccumulator = 0;
+  let genderWeight = 0;
   let usageAccumulator = 0;
   let usageWeight = 0;
 
@@ -76,8 +78,9 @@ export const calculateNationalMetrics = (
     summary.people.docents += stats.people.docents;
     summary.people.professors += stats.people.professors;
     summary.people.associateProfessors += stats.people.associateProfessors;
-    ageAccumulator += stats.people.avgAge * stats.people.total;
-    ageWeight += stats.people.total;
+    femaleShareAccumulator += stats.people.femaleSharePercent * stats.people.total;
+    maleShareAccumulator += stats.people.maleSharePercent * stats.people.total;
+    genderWeight += stats.people.total;
 
     summary.finances.total += stats.finances.total;
     summary.finances.lastYear += stats.finances.lastYear;
@@ -88,7 +91,8 @@ export const calculateNationalMetrics = (
   });
 
   summary.projects.avgDuration = durationWeight ? durationAccumulator / durationWeight : 0;
-  summary.people.avgAge = ageWeight ? ageAccumulator / ageWeight : 0;
+  summary.people.femaleSharePercent = genderWeight ? femaleShareAccumulator / genderWeight : 0;
+  summary.people.maleSharePercent = genderWeight ? maleShareAccumulator / genderWeight : 0;
   summary.finances.avgExpense = summary.finances.total
     ? summary.finances.avgExpense / summary.finances.total
     : 0;

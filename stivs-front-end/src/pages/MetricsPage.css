@@ -49,6 +49,68 @@
   justify-content: flex-end;
 }
 
+.metrics-year-select {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: linear-gradient(135deg, #2563eb, #0ea5e9);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 0.5rem 2.1rem 0.5rem 1rem;
+  box-shadow: 0 12px 20px rgba(37, 99, 235, 0.22);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.metrics-year-select:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 24px rgba(37, 99, 235, 0.3);
+}
+
+.metrics-year-select-icon {
+  color: #ffffff;
+  flex-shrink: 0;
+}
+
+.metrics-year-select label {
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.metrics-year-select select {
+  appearance: none;
+  border: none;
+  background: transparent;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #ffffff;
+  cursor: pointer;
+  padding-right: 0.1rem;
+}
+
+.metrics-year-select select:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.7);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.metrics-year-select select option {
+  color: #0f172a;
+  background: #ffffff;
+}
+
+.metrics-year-select-chevron {
+  position: absolute;
+  right: 0.85rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: rgba(255, 255, 255, 0.85);
+  pointer-events: none;
+}
+
 .metrics-info-button {
   display: inline-flex;
   align-items: center;
@@ -147,7 +209,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1.85fr) minmax(360px, 1.1fr);
   gap: 1.5rem;
-  align-items: start;
+  align-items: stretch;
 }
 
 .metrics-scatter-card,
@@ -298,6 +360,7 @@
   padding: 0.75rem;
   border: 1px solid rgba(148, 197, 255, 0.35);
   min-height: 300px;
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;

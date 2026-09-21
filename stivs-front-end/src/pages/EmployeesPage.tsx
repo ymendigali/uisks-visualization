@@ -1,13 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Download, Search, ArrowUpDown, SlidersHorizontal } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { useRegionContext } from '../context/RegionContext';
-import type { RegionId } from '../context/RegionContext'; 
+import { useLocalRegionSelection } from '../hooks/useLocalRegionSelection';
+import type { RegionId } from '../context/RegionContext';
 import './EmployeesPage.css';
 import { useTranslation } from 'react-i18next';
 import { employeesApi, mapRegionToId, resolveRegionLabel } from '../api/services';
 import type { BackendEmployee } from '../api/types';
 import { H_INDEX_RANGE_BY_GROUP, useEmployeesData } from '../hooks/useEmployeesData';
+import SearchableSelect from '../components/SearchableSelect/SearchableSelect';
 import PageLoader from '../components/PageLoader/PageLoader';
 import { exportPdfReport } from '../utils/exportPdfReport';
 
@@ -185,7 +186,7 @@ const toEmployee = (item: BackendEmployee): Employee => {
 
 // --- 3. Компонент страницы ---
 const EmployeesPage: React.FC = () => {
-  const { selectedRegionId, regions } = useRegionContext();
+  const { selectedRegionId, regions } = useLocalRegionSelection();
   const { t } = useTranslation(); 
   const [currentPage, setCurrentPage] = useState(1);
   
@@ -698,19 +699,25 @@ const EmployeesPage: React.FC = () => {
                   {t('filter_label_affiliate')}
                   <span className="employees-filter-badge">доступно {employeesAvailableCounts.affiliate}</span>
                 </label>
-                <select
+                <SearchableSelect
                   id="affiliate-filter"
                   value={filters.affiliateType}
-                  onChange={(e) => handleFilterChange('affiliateType', e.target.value as AffiliateType)}
-                >
-                  <option value="all">{t('filter_option_all')}</option>
-                  {allAffiliateTypes.map((affiliateOption) => (
-                    <option key={affiliateOption} value={affiliateOption}>
-                      {affiliateOption === 'staff' ? t('affiliate_staff') : affiliateOption === 'external' ? t('affiliate_external') : affiliateOption}
-                      {affiliateCountByValue.get(affiliateOption) !== undefined ? ` (${affiliateCountByValue.get(affiliateOption)})` : ''}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(nextValue) => handleFilterChange('affiliateType', nextValue as AffiliateType)}
+                  allLabel={t('filter_option_all')}
+                  placeholder={t('filter_search_placeholder')}
+                  options={allAffiliateTypes.map((affiliateOption) => ({
+                    value: affiliateOption,
+                    label:
+                      (affiliateOption === 'staff'
+                        ? t('affiliate_staff')
+                        : affiliateOption === 'external'
+                          ? t('affiliate_external')
+                          : affiliateOption) +
+                      (affiliateCountByValue.get(affiliateOption) !== undefined
+                        ? ` (${affiliateCountByValue.get(affiliateOption)})`
+                        : ''),
+                  }))}
+                />
               </div>
 
               <div className="employees-filter-item">
@@ -786,19 +793,21 @@ const EmployeesPage: React.FC = () => {
                   {t('filter_label_department')}
                   <span className="employees-filter-badge">доступно {employeesAvailableCounts.department}</span>
                 </label>
-                <select
+                <SearchableSelect
                   id="department-filter"
                   value={filters.department}
-                  onChange={(e) => handleFilterChange('department', e.target.value)}
-                >
-                  <option value="all">{t('filter_option_all_departments')}</option>
-                  {allDepartments.map((department) => (
-                    <option key={department} value={department}>
-                      {department}
-                      {departmentCountByValue.get(department) !== undefined ? ` (${departmentCountByValue.get(department)})` : ''}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(nextValue) => handleFilterChange('department', nextValue)}
+                  allLabel={t('filter_option_all_departments')}
+                  placeholder={t('filter_search_placeholder')}
+                  options={allDepartments.map((department) => ({
+                    value: department,
+                    label:
+                      department +
+                      (departmentCountByValue.get(department) !== undefined
+                        ? ` (${departmentCountByValue.get(department)})`
+                        : ''),
+                  }))}
+                />
               </div>
 
               <div className="employees-filter-item">

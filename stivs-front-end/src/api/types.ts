@@ -28,6 +28,8 @@ export interface BackendProject {
   spent: number;
   startDate: string | null;
   endDate: string | null;
+  startYear?: number | null;
+  endYear?: number | null;
   tags?: string[];
   description?: string;
   teamIds?: string[];
@@ -72,6 +74,9 @@ export interface BackendPublication {
 export interface FinanceSummary {
   totalBudget: number;
   totalSpent: number;
+  grantsCount: number;
+  programsCount: number;
+  cofinancingTotal: number;
   byCategory: Array<{ category: string; amount: number }>;
   byRegion: Array<{ region: string; amount: number }>;
 }
@@ -205,6 +210,8 @@ export interface DashboardRegionSummary {
   publications: number;
   employees: number;
   budget: number;
+  grants: number;
+  programs: number;
 }
 
 export interface DashboardFilterOption {
@@ -241,7 +248,8 @@ export interface DashboardSummary {
     docents: number;
     professors: number;
     associateProfessors: number;
-    avgAge: number;
+    femaleSharePercent: number;
+    maleSharePercent: number;
   };
   finances: {
     total: number;

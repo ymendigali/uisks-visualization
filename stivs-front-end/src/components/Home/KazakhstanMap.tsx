@@ -11,8 +11,10 @@ interface KazakhstanMapProps {
   selectedRegionId: string;
   onRegionSelect: (regionId: string) => void;
   getRegionFill?: (regionId: string) => string | undefined;
+  getRegionTooltip?: (regionId: string) => string | undefined;
   useShortLabels?: boolean;
   showLabels?: boolean;
+  showCityLabels?: boolean;
 }
 
 type MapFeature = {
@@ -29,8 +31,10 @@ const KazakhstanMap: React.FC<KazakhstanMapProps> = ({
   selectedRegionId,
   onRegionSelect,
   getRegionFill,
+  getRegionTooltip,
   useShortLabels = true,
   showLabels = true,
+  showCityLabels = true,
 }) => {
   const [hoveredRegion, setHoveredRegion] = useState<string | null>(null);
   const [featureCollection, setFeatureCollection] = useState<FeatureCollection | null>(null);
@@ -133,6 +137,7 @@ const KazakhstanMap: React.FC<KazakhstanMapProps> = ({
       const isSelected = feature.id === selectedRegionId;
       const isHovered = feature.id === hoveredRegion;
       const isCity = feature.type === 'city';
+      const tooltipText = getRegionTooltip?.(feature.id);
       const customFill = getRegionFill?.(feature.id);
       const shouldTint = Boolean(customFill) && !isSelected && !isHovered;
       const shapeStyle = shouldTint ? { fill: customFill } : undefined;
@@ -169,7 +174,9 @@ const KazakhstanMap: React.FC<KazakhstanMapProps> = ({
                 }
               : undefined}
             onClick={!isCity ? () => handleSelect(feature.id) : undefined}
-          />
+          >
+            {!isCity && tooltipText && <title>{tooltipText}</title>}
+          </path>
           {isCity && (
             <circle
               className={clsx('city-marker', {
@@ -195,9 +202,11 @@ const KazakhstanMap: React.FC<KazakhstanMapProps> = ({
                 }
               }}
               onClick={() => handleSelect(feature.id)}
-            />
+            >
+              {tooltipText && <title>{tooltipText}</title>}
+            </circle>
           )}
-          {showLabels && (
+          {((isCity && showCityLabels) || (!isCity && showLabels)) && (
             <text x={feature.label[0]} y={feature.label[1]} className="region-label">
               {useShortLabels ? feature.shortName : feature.name}
             </text>
@@ -205,7 +214,16 @@ const KazakhstanMap: React.FC<KazakhstanMapProps> = ({
         </g>
       );
     },
-    [getRegionFill, handleSelect, hoveredRegion, selectedRegionId, showLabels, useShortLabels],
+    [
+      getRegionFill,
+      getRegionTooltip,
+      handleSelect,
+      hoveredRegion,
+      selectedRegionId,
+      showCityLabels,
+      showLabels,
+      useShortLabels,
+    ],
   );
 
   if (isLoading) {

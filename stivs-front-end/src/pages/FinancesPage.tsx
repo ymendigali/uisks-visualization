@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
-import { useRegionContext } from '../context/RegionContext';
+import { useLocalRegionSelection } from '../hooks/useLocalRegionSelection';
 import type { RegionId } from '../context/RegionContext';
 import KazakhstanMap from '../components/Home/KazakhstanMap';
 import { calculateNationalMetrics, formatNumber } from '../utils/metrics';
@@ -36,7 +36,7 @@ ChartJS.register(
 
 type FinancingType = string;
 type CofinancingType = 'all' | 'contract' | 'actual';
-type ExpenseCategory = 'salary' | 'travel' | 'support' | 'materials' | 'rent' | 'protocol';
+type ExpenseCategory = 'salary' | 'travel' | 'support' | 'materials' | 'rent' | 'other';
 type PriorityDirection = 'all' | 'digital' | 'education' | 'biotech' | 'energy';
 type CompetitionName = 'all' | 'innovation' | 'grant2025' | 'pilot';
 type ApplicantType = 'all' | 'universities' | 'companies' | 'research';
@@ -89,7 +89,7 @@ const getFinancesOptions = (t: (key: string) => string) => ({
     { value: 'support', label: t('finances_expense_support') },
     { value: 'materials', label: t('finances_expense_materials') },
     { value: 'rent', label: t('finances_expense_rent') },
-    { value: 'protocol', label: t('finances_expense_protocol') },
+    { value: 'other', label: t('finances_expense_other') },
   ],
   priority: [
     { value: 'all', label: t('finances_option_all_priorities') },
@@ -121,7 +121,7 @@ const getFinancesOptions = (t: (key: string) => string) => ({
 
 const COFINANCING_DEFAULTS: CofinancingType[] = ['contract', 'actual'];
 
-const EXPENSE_DEFAULTS: ExpenseCategory[] = ['salary', 'travel', 'support', 'materials', 'rent', 'protocol'];
+const EXPENSE_DEFAULTS: ExpenseCategory[] = ['salary', 'travel', 'support', 'materials', 'rent', 'other'];
 
 const FINANCING_TYPE_DEFAULTS: FinancingType[] = [
   'Грантовое финансирование',
@@ -172,7 +172,7 @@ const applyRealFinances = (
 const FinancesPage: React.FC = () => {
   const { t } = useTranslation();
   const { selectedRegion, selectedRegionId, setSelectedRegionId, regions, isNational } =
-    useRegionContext();
+    useLocalRegionSelection();
 
   const regionLabel = selectedRegion?.name ?? t('republic_kazakhstan');
   const currencyUnitShort = t('unit_bln_kzt_symbol');
@@ -770,13 +770,18 @@ const FinancesPage: React.FC = () => {
   const topRegions = useMemo(
     () =>
       regions
-        .map((region) => ({
-          id: region.id,
-          name: region.name,
-          total: region.stats.finances.total,
-          lastYear: region.stats.finances.lastYear,
-          budgetUsage: region.stats.finances.budgetUsage,
-        }))
+        .map((region) => {
+          const total = region.stats.finances.total;
+          const lastYear = region.stats.finances.lastYear;
+          const trend = lastYear > 0 ? ((total - lastYear) / lastYear) * 100 : 0;
+          return {
+            id: region.id,
+            name: region.name,
+            total,
+            lastYear,
+            trend,
+          };
+        })
         .sort((a, b) => b.total - a.total)
         .slice(0, 6),
     [regions],
@@ -787,53 +792,47 @@ const FinancesPage: React.FC = () => {
       return [];
     }
 
-    const share = (adjustedMetrics.finances.total / nationalMetrics.finances.total) * 100;
+    const regionGrants = apiSummary?.grantsCount ?? 0;
+    const nationalGrants = nationalApiSummary?.grantsCount ?? 0;
+    const regionPrograms = apiSummary?.programsCount ?? 0;
+    const nationalPrograms = nationalApiSummary?.programsCount ?? 0;
+    const regionCofinancing = (apiSummary?.cofinancingTotal ?? 0) / 1_000_000_000;
+    const nationalCofinancing = (nationalApiSummary?.cofinancingTotal ?? 0) / 1_000_000_000;
+
+    const shareOf = (regionValue: number, nationalValue: number) =>
+      nationalValue > 0 ? (regionValue / nationalValue) * 100 : 0;
 
     return [
       {
-        label: t('comparison_projects_count'),
-        // label: 'Финансирование, млрд. тг',
+        label: t('comparison_grants_count'),
+        regionValue: `${formatNumber(regionGrants)}`,
+        nationalValue: `${formatNumber(nationalGrants)}`,
+        delta: t('finances_share_value', { value: shareOf(regionGrants, nationalGrants).toFixed(1) }),
+      },
+      {
+        label: t('comparison_programs_count'),
+        regionValue: `${formatNumber(regionPrograms)}`,
+        nationalValue: `${formatNumber(nationalPrograms)}`,
+        delta: t('finances_share_value', { value: shareOf(regionPrograms, nationalPrograms).toFixed(1) }),
+      },
+      {
+        label: t('comparison_total_approved'),
         regionValue: `${formatNumber(adjustedMetrics.finances.total, { maximumFractionDigits: 1 })}`,
         nationalValue: `${formatNumber(nationalMetrics.finances.total, { maximumFractionDigits: 1 })}`,
-        delta: t('finances_share_value', { value: share.toFixed(1) }),
-      },
-      {
-        label: t('comparison_total_finances'),
-        // label: 'Финансирование за прошлый год, млрд. тг',
-        regionValue: `${formatNumber(adjustedMetrics.finances.lastYear, { maximumFractionDigits: 1 })}`,
-        nationalValue: `${formatNumber(nationalMetrics.finances.lastYear, { maximumFractionDigits: 1 })}`,
         delta: t('finances_share_value', {
-          value: ((adjustedMetrics.finances.lastYear / nationalMetrics.finances.lastYear) * 100).toFixed(1),
+          value: shareOf(adjustedMetrics.finances.total, nationalMetrics.finances.total).toFixed(1),
         }),
       },
       {
-        label: t('comparison_avg_expense'),
-        regionValue: `${formatNumber(adjustedMetrics.finances.avgExpense)}`,
-        nationalValue: `${formatNumber(nationalMetrics.finances.avgExpense)}`,
-        delta: t('finances_difference_currency', {
-          value: (adjustedMetrics.finances.avgExpense - nationalMetrics.finances.avgExpense).toFixed(0),
-        }),
-      },
-      {
-        label: t('comparison_budget_usage'),
-        regionValue: `${formatNumber(adjustedMetrics.finances.budgetUsage, { maximumFractionDigits: 1 })}%`,
-        nationalValue: `${formatNumber(nationalMetrics.finances.budgetUsage, { maximumFractionDigits: 1 })}%`,
-        delta: t('finances_difference_pp', {
-          value: (adjustedMetrics.finances.budgetUsage - nationalMetrics.finances.budgetUsage).toFixed(1),
-        }),
-      },
-      {
-        label: t('comparison_regional_programs'),
-        regionValue: `${formatNumber(adjustedMetrics.finances.regionalPrograms)}`,
-        nationalValue: `${formatNumber(nationalMetrics.finances.regionalPrograms)}`,
+        label: t('comparison_cofinancing_total'),
+        regionValue: `${formatNumber(regionCofinancing, { maximumFractionDigits: 2 })}`,
+        nationalValue: `${formatNumber(nationalCofinancing, { maximumFractionDigits: 2 })}`,
         delta: t('finances_share_value', {
-          value: (
-            (adjustedMetrics.finances.regionalPrograms / nationalMetrics.finances.regionalPrograms) * 100
-          ).toFixed(1),
+          value: shareOf(regionCofinancing, nationalCofinancing).toFixed(1),
         }),
       },
     ];
-  }, [adjustedMetrics, nationalMetrics, selectedRegion, t]);
+  }, [adjustedMetrics, apiSummary, nationalApiSummary, nationalMetrics, selectedRegion, t]);
 
   const highlightCards = [
     {
@@ -1306,13 +1305,12 @@ const FinancesPage: React.FC = () => {
           >
             <header className="finances-chart-header">
               <h2>{t('finances_type_distribution_title')}</h2>
-              <span>{t('finances_type_distribution_subtitle')}</span>
             </header>
             <div className="finances-chip-select-row">
-              <label htmlFor="financing-type-chart-filter">{t('finances_add_type_label')}</label>
               <select
                 id="financing-type-chart-filter"
                 className="finances-chip-select"
+                aria-label={t('finances_add_type_label')}
                 value=""
                 onChange={handleFinancingTypeChartSelect}
                 disabled={remainingFinancingTypeOptions.length === 0}
@@ -1415,13 +1413,12 @@ const FinancesPage: React.FC = () => {
           >
             <header className="finances-chart-header">
               <h2>{t('finances_cofinancing_card_title')}</h2>
-              <span>{t('finances_cofinancing_card_subtitle')}</span>
             </header>
             <div className="finances-chip-select-row">
-              <label htmlFor="cofinancing-chart-filter">{t('finances_add_indicator_label')}</label>
               <select
                 id="cofinancing-chart-filter"
                 className="finances-chip-select"
+                aria-label={t('finances_add_indicator_label')}
                 value=""
                 onChange={handleCofinancingChartSelect}
                 disabled={remainingCofinancingOptions.length === 0}
@@ -1511,7 +1508,7 @@ const FinancesPage: React.FC = () => {
                 <th>{t('table_header_region')}</th>
                 <th>{t('table_header_financing')}</th>
                 <th>{t('table_header_previous_year')}</th>
-                <th>{t('comparison_budget_usage')}</th>
+                <th>{t('table_header_trend')}</th>
               </tr>
             </thead>
             <tbody>
@@ -1528,7 +1525,17 @@ const FinancesPage: React.FC = () => {
                   </td>
                   <td>{formatNumber(region.total, { maximumFractionDigits: 1 })}</td>
                   <td>{formatNumber(region.lastYear, { maximumFractionDigits: 1 })}</td>
-                  <td>{formatNumber(region.budgetUsage, { maximumFractionDigits: 1 })}%</td>
+                  <td>
+                    <span
+                      className={
+                        region.trend >= 0
+                          ? 'finances-trend finances-trend--up'
+                          : 'finances-trend finances-trend--down'
+                      }
+                    >
+                      {region.trend >= 0 ? '▲' : '▼'} {formatNumber(Math.abs(region.trend), { maximumFractionDigits: 1 })}%
+                    </span>
+                  </td>
                 </tr>
               ))}
             </tbody>

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Download, Search, ArrowUpDown, SlidersHorizontal, ChevronDown } from 'lucide-react';
-import { useRegionContext } from '../context/RegionContext';
+import { useLocalRegionSelection } from '../hooks/useLocalRegionSelection';
 import type { RegionId } from '../context/RegionContext';
 import { useTranslation } from 'react-i18next';
 import './ProjectsPage.css';
@@ -207,8 +207,9 @@ const toProjectStatus = (value: string): ProjectStatus => {
 };
 
 const toProject = (item: BackendProject): Project => {
-	const startYear = item.startDate ? new Date(item.startDate).getFullYear() : YEAR_RANGE.min;
-	const endYear = item.endDate ? new Date(item.endDate).getFullYear() : YEAR_RANGE.max;
+	const startYear =
+		item.startYear ?? (item.startDate ? new Date(item.startDate).getFullYear() : YEAR_RANGE.min);
+	const endYear = item.endYear ?? (item.endDate ? new Date(item.endDate).getFullYear() : YEAR_RANGE.max);
 
 	return {
 		id: item.id,
@@ -232,7 +233,7 @@ const toProject = (item: BackendProject): Project => {
 
 const ProjectsPage: React.FC = () => {
 	const { t } = useTranslation();
-	const { selectedRegionId, setSelectedRegionId, regions } = useRegionContext();
+	const { selectedRegionId, setSelectedRegionId, regions } = useLocalRegionSelection();
 	
 	// Динамические переводы
 	const priorityLabels = useMemo<Record<string, string>>(
@@ -299,7 +300,6 @@ const ProjectsPage: React.FC = () => {
 			{ key: 'financingType', label: columnLabels.financingType },
 			{ key: 'financingTotal', label: columnLabels.financingTotal, sortKey: 'financingTotal' },
 			{ key: 'region', label: columnLabels.region },
-			{ key: 'status', label: columnLabels.status },
 			{ key: 'period', label: columnLabels.period },
 		],
 		[columnLabels],
