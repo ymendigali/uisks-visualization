@@ -24,6 +24,7 @@ import './PublicationsPage.css';
 import type { BackendPublication, PaginationMeta } from '../api/types';
 import { usePublicationsData } from '../hooks/usePublicationsData';
 import { projectsApi } from '../api/services';
+import { translatePriority } from '../utils/dataTranslations';
 import PageLoader from '../components/PageLoader/PageLoader';
 
 ChartJS.register(
@@ -272,7 +273,7 @@ const filterSelect = (
 );
 
 const PublicationsPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { selectedRegion, selectedRegionId, setSelectedRegionId, regions } = useLocalRegionSelection();
   const [filters, setFilters] = useState<FilterState>(defaultFilters);
 
@@ -873,7 +874,7 @@ const PublicationsPage: React.FC = () => {
               filters.priority,
               [
                 { value: 'all', label: t('pub_priority_all') },
-                ...realPriorityOptions.map((value) => ({ value, label: value })),
+                ...realPriorityOptions.map((value) => ({ value, label: translatePriority(value, i18n.language) })),
               ],
               (value) => handleSelectChange('priority', value),
               publicationsAvailableCounts.priority,

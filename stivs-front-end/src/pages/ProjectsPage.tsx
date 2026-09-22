@@ -9,6 +9,7 @@ import type { BackendProject } from '../api/types';
 import { useProjectsData } from '../hooks/useProjectsData';
 import PageLoader from '../components/PageLoader/PageLoader';
 import { exportPdfReport } from '../utils/exportPdfReport';
+import { translatePriority, translateProjectTitle } from '../utils/dataTranslations';
 
 type ProjectStatus = 'active' | 'completed' | 'draft';
 type TrlLevel = 3 | 4 | 5 | 6 | 7 | 8 | 9;
@@ -18,6 +19,7 @@ interface Project {
 	id: string;
 	irn: string;
 	title: string;
+	excelData?: Record<string, unknown>;
 	applicant: string;
 	supervisor: string;
 	priority: string;
@@ -215,6 +217,7 @@ const toProject = (item: BackendProject): Project => {
 		id: item.id,
 		irn: item.id.toUpperCase(),
 		title: item.title,
+		excelData: item.excelData,
 		applicant: item.lead || '—',
 		supervisor: item.lead || '—',
 		priority: item.priority || '—',
@@ -232,7 +235,7 @@ const toProject = (item: BackendProject): Project => {
 };
 
 const ProjectsPage: React.FC = () => {
-	const { t } = useTranslation();
+	const { t, i18n } = useTranslation();
 	const { selectedRegionId, setSelectedRegionId, regions } = useLocalRegionSelection();
 	
 	// Динамические переводы
@@ -566,11 +569,11 @@ const ProjectsPage: React.FC = () => {
 			case 'irn':
 				return renderCompactText(project.irn);
 			case 'title':
-				return renderCompactText(project.title);
+				return renderCompactText(translateProjectTitle(project.title, project.excelData, i18n.language));
 			case 'applicant':
 				return renderCompactText(project.applicant);
 			case 'priority':
-				return renderCompactText(priorityLabels[project.priority] ?? project.priority);
+				return renderCompactText(translatePriority(project.priority, i18n.language));
 			case 'financingType':
 				return renderCompactText(formatFinancingType(project.financingType));
 			case 'financingTotal':
@@ -591,11 +594,11 @@ const ProjectsPage: React.FC = () => {
 			case 'irn':
 				return project.irn;
 			case 'title':
-				return project.title;
+				return translateProjectTitle(project.title, project.excelData, i18n.language);
 			case 'applicant':
 				return project.applicant;
 			case 'priority':
-				return priorityLabels[project.priority] ?? project.priority;
+				return translatePriority(project.priority, i18n.language);
 			case 'financingType':
 				return formatFinancingType(project.financingType);
 			case 'financingTotal':
@@ -926,7 +929,7 @@ const ProjectsPage: React.FC = () => {
 								>
 									{priorityOptions.map((priority) => (
 										<option key={priority} value={priority}>
-											{priority === 'all' ? t('projects_option_all_priorities') : (priorityLabels[priority] ?? priority)}
+											{priority === 'all' ? t('projects_option_all_priorities') : translatePriority(priority, i18n.language)}
 										</option>
 									))}
 								</select>

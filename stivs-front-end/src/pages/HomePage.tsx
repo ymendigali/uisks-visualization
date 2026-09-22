@@ -12,9 +12,10 @@ import { ApiError } from '../api/client';
 import { dashboardApi } from '../api/services';
 import type { DashboardFilterOptions, DashboardRegionSummary, DashboardSummary } from '../api/types';
 import PageLoader from '../components/PageLoader/PageLoader';
+import { translatePriority } from '../utils/dataTranslations';
 
 const HomePage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { selectedRegionId, selectedRegion, setSelectedRegionId } = useRegionContext();
   const [dashboardSummary, setDashboardSummary] = useState<DashboardSummary | null>(null);
   const [dashboardFilters, setDashboardFilters] = useState<DashboardFilterOptions>({
@@ -357,7 +358,7 @@ const HomePage: React.FC = () => {
                 <option value="">{t('filter_all_priorities')}</option>
                 {dashboardFilters.priority.map((option) => (
                   <option key={`priority-${option.value}`} value={option.value}>
-                    {option.label}
+                    {translatePriority(option.value, i18n.language) || option.label}
                   </option>
                 ))}
               </select>

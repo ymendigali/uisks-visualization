@@ -11,6 +11,7 @@ import { H_INDEX_RANGE_BY_GROUP, useEmployeesData } from '../hooks/useEmployeesD
 import SearchableSelect from '../components/SearchableSelect/SearchableSelect';
 import PageLoader from '../components/PageLoader/PageLoader';
 import { exportPdfReport } from '../utils/exportPdfReport';
+import { translateDegree, translateGender } from '../utils/dataTranslations';
 
 // --- 1. Типы данных и мок-данные ---
 // Значения этих полей приходят с backend как произвольные строки (реальные данные из БД),
@@ -187,7 +188,7 @@ const toEmployee = (item: BackendEmployee): Employee => {
 // --- 3. Компонент страницы ---
 const EmployeesPage: React.FC = () => {
   const { selectedRegionId, regions } = useLocalRegionSelection();
-  const { t } = useTranslation(); 
+  const { t, i18n } = useTranslation();
   const [currentPage, setCurrentPage] = useState(1);
   
   const [filters, setFilters] = useState<EmployeeFilters>(() => createInitialFilters());
@@ -419,7 +420,9 @@ const EmployeesPage: React.FC = () => {
   const renderEmployeeCell = (columnKey: EmployeeColumnKey, employee: Employee): React.ReactNode => {
     switch (columnKey) {
       case 'name': {
-        const fullName = `${employee.name} (${employee.gender === 'male' ? t('gender_short_male') : t('gender_short_female')})`;
+        const genderShort =
+          employee.gender === 'Мужчина' ? t('gender_short_male') : employee.gender === 'Женщина' ? t('gender_short_female') : '';
+        const fullName = genderShort ? `${employee.name} (${genderShort})` : employee.name;
         return (
           <Link
             to={`/employees/profile/${employee.id}`}
@@ -434,7 +437,7 @@ const EmployeesPage: React.FC = () => {
       case 'position':
         return renderTruncatedText(employee.position);
       case 'degree':
-        return renderTruncatedText(employee.degree === 'none' ? '-' : employee.degree);
+        return renderTruncatedText(employee.degree === 'none' ? '-' : translateDegree(employee.degree, i18n.language));
       case 'scopusAuthorId':
         return renderTruncatedText(employee.scopusAuthorId);
       case 'hIndexScopus':
@@ -469,12 +472,15 @@ const EmployeesPage: React.FC = () => {
 
   const getEmployeeCellText = (columnKey: EmployeeColumnKey, employee: Employee): string => {
     switch (columnKey) {
-      case 'name':
-        return `${employee.name} (${employee.gender === 'male' ? t('gender_short_male') : t('gender_short_female')})`;
+      case 'name': {
+        const genderShort =
+          employee.gender === 'Мужчина' ? t('gender_short_male') : employee.gender === 'Женщина' ? t('gender_short_female') : '';
+        return genderShort ? `${employee.name} (${genderShort})` : employee.name;
+      }
       case 'position':
         return employee.position;
       case 'degree':
-        return employee.degree === 'none' ? '-' : employee.degree;
+        return employee.degree === 'none' ? '-' : translateDegree(employee.degree, i18n.language);
       case 'scopusAuthorId':
         return employee.scopusAuthorId;
       case 'hIndexScopus':
@@ -687,7 +693,7 @@ const EmployeesPage: React.FC = () => {
                   <option value="all">{t('filter_option_any')}</option>
                   {allGenders.map((genderOption) => (
                     <option key={genderOption} value={genderOption}>
-                      {genderOption === 'male' ? t('gender_male') : genderOption === 'female' ? t('gender_female') : genderOption}
+                      {translateGender(genderOption, i18n.language)}
                       {genderCountByValue.get(genderOption) !== undefined ? ` (${genderCountByValue.get(genderOption)})` : ''}
                     </option>
                   ))}
@@ -781,7 +787,7 @@ const EmployeesPage: React.FC = () => {
                   <option value="all">{t('filter_option_all_degrees')}</option>
                   {allDegrees.map((degreeOption) => (
                     <option key={degreeOption} value={degreeOption}>
-                      {degreeOption}
+                      {degreeOption === 'none' ? degreeOption : translateDegree(degreeOption, i18n.language)}
                       {degreeCountByValue.get(degreeOption) !== undefined ? ` (${degreeCountByValue.get(degreeOption)})` : ''}
                     </option>
                   ))}

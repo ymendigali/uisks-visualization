@@ -21,6 +21,7 @@ import './FinancesPage.css';
 import { useTranslation } from 'react-i18next';
 import { useFinanceSummary } from '../hooks/useFinanceSummary';
 import { financesApi } from '../api/services';
+import { translatePriority } from '../utils/dataTranslations';
 import type { FinanceFilterMeta, FinanceFilterOptions, FinanceSummary } from '../api/types';
 import PageLoader from '../components/PageLoader/PageLoader';
 
@@ -170,7 +171,7 @@ const applyRealFinances = (
 };
 
 const FinancesPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { selectedRegion, selectedRegionId, setSelectedRegionId, regions, isNational } =
     useLocalRegionSelection();
 
@@ -1104,7 +1105,7 @@ const FinancesPage: React.FC = () => {
           >
             {PRIORITY_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
-                {option.label}
+                {option.value === 'all' ? option.label : translatePriority(option.value, i18n.language)}
               </option>
             ))}
           </select>

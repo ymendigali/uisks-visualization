@@ -41,6 +41,7 @@ export interface BackendProject {
   customer?: string;
   mrnti?: string;
   trl?: number | null;
+  excelData?: Record<string, unknown>;
 }
 
 export interface BackendEmployee {
