@@ -966,7 +966,7 @@ const PublicationsPage: React.FC = () => {
           <header>
             <h3>
               {t('publications_chart_scopus')}
-              <span className="publications-inline-help">
+              <span className="publications-inline-help publications-inline-help--align-right">
                 <button
                   type="button"
                   className="publications-inline-help-button"
@@ -1031,7 +1031,7 @@ const PublicationsPage: React.FC = () => {
           <header>
             <h3>
               {t('publications_chart_implementation')}
-              <span className="publications-inline-help">
+              <span className="publications-inline-help publications-inline-help--align-right">
                 <button
                   type="button"
                   className="publications-inline-help-button"
