@@ -1,5 +1,5 @@
-import React, { useCallback, useMemo, useState, useRef, type CSSProperties } from 'react';
-import { Download } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useState, useRef, type CSSProperties } from 'react';
+import { CircleHelp, Download } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Bar, Doughnut, Chart as ChartComponent } from 'react-chartjs-2';
 import {
@@ -23,6 +23,7 @@ import { formatNumber } from '../utils/metrics';
 import './PublicationsPage.css';
 import type { BackendPublication, PaginationMeta } from '../api/types';
 import { usePublicationsData } from '../hooks/usePublicationsData';
+import { projectsApi } from '../api/services';
 import PageLoader from '../components/PageLoader/PageLoader';
 
 ChartJS.register(
@@ -68,7 +69,6 @@ const defaultFilters: FilterState = {
   trl: 'all',
 };
 
-const irnOptions = ['all', 'IRN-001', 'IRN-045', 'IRN-512', 'IRN-970'];
 const mrntiOptions = ['all', '11.00.00', '21.45.10', '27.00.00'];
 const trlOptions = ['all', 'TRL 3', 'TRL 4', 'TRL 5', 'TRL 6', 'TRL 7', 'TRL 8', 'TRL 9'];
 
@@ -296,6 +296,28 @@ const PublicationsPage: React.FC = () => {
   );
   const [isDraggingStats, setIsDraggingStats] = useState(false);
 
+  const [realIrnOptions, setRealIrnOptions] = useState<string[]>([]);
+  const [realPriorityOptions, setRealPriorityOptions] = useState<string[]>([]);
+  useEffect(() => {
+    const controller = new AbortController();
+    projectsApi
+      .filters()
+      .then((payload) => {
+        if (!controller.signal.aborted) {
+          setRealIrnOptions(payload.irn ?? []);
+          setRealPriorityOptions(payload.priority ?? []);
+        }
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setRealIrnOptions([]);
+          setRealPriorityOptions([]);
+        }
+      });
+    return () => controller.abort();
+  }, []);
+  const irnOptions = useMemo(() => ['all', ...realIrnOptions], [realIrnOptions]);
+
   // Get translated filter options
   const translatedFilterOptions = useMemo(() => getPublicationFilterOptions(t), [t]);
   const publicationTypeOptions = useMemo(
@@ -326,7 +348,7 @@ const PublicationsPage: React.FC = () => {
     () => ({
       irn: Math.max(irnOptions.length - 1, 0),
       financingType: publicationTypeOptions.length,
-      priority: 4,
+      priority: realPriorityOptions.length,
       contest: Math.max(translatedFilterOptions.contests.length - 1, 0),
       applicant: applicantOptions.length,
       customer: Math.max(translatedFilterOptions.customers.length - 1, 0),
@@ -337,7 +359,9 @@ const PublicationsPage: React.FC = () => {
     }),
     [
       applicantOptions,
+      irnOptions,
       publicationTypeOptions,
+      realPriorityOptions,
       regions,
       translatedFilterOptions.contests,
       translatedFilterOptions.customers,
@@ -826,9 +850,9 @@ const PublicationsPage: React.FC = () => {
           <div className="publications-filter-grid">
             {filterSelect(
               'filter-irn',
-              'IRN',
+              t('projects_label_irn'),
               filters.irn,
-              irnOptions.map((value) => ({ value, label: value === 'all' ? t('pub_contests_all') : value })),
+              irnOptions.map((value) => ({ value, label: value === 'all' ? t('projects_filter_irn') : value })),
               (value) => handleSelectChange('irn', value),
               publicationsAvailableCounts.irn,
             )}
@@ -849,10 +873,7 @@ const PublicationsPage: React.FC = () => {
               filters.priority,
               [
                 { value: 'all', label: t('pub_priority_all') },
-                { value: 'health', label: t('pub_priority_health') },
-                { value: 'economy', label: t('pub_priority_economy') },
-                { value: 'energy', label: t('pub_priority_energy') },
-                { value: 'ai', label: t('pub_priority_ai') },
+                ...realPriorityOptions.map((value) => ({ value, label: value })),
               ],
               (value) => handleSelectChange('priority', value),
               publicationsAvailableCounts.priority,
@@ -943,7 +964,23 @@ const PublicationsPage: React.FC = () => {
 
         <article className="publications-chart-card">
           <header>
-            <h3>{t('publications_chart_scopus')}</h3>
+            <h3>
+              {t('publications_chart_scopus')}
+              <span className="publications-inline-help">
+                <button
+                  type="button"
+                  className="publications-inline-help-button"
+                  aria-label={t('publications_chart_scopus_help_aria')}
+                >
+                  <CircleHelp size={14} />
+                </button>
+                <span className="publications-inline-help-tooltip" role="tooltip">
+                  <p>{t('publications_chart_scopus_help_p1')}</p>
+                  <p>{t('publications_chart_scopus_help_p2')}</p>
+                  <p>{t('publications_chart_scopus_help_p3')}</p>
+                </span>
+              </span>
+            </h3>
           </header>
           <div className="chart-body">
             <Doughnut data={scopusChartData} options={doughnutOptions} />
@@ -952,7 +989,27 @@ const PublicationsPage: React.FC = () => {
 
         <article className="publications-chart-card">
           <header>
-            <h3>{t('publications_chart_wos')}</h3>
+            <h3>
+              {t('publications_chart_wos')}
+              <span className="publications-inline-help publications-inline-help--align-right">
+                <button
+                  type="button"
+                  className="publications-inline-help-button"
+                  aria-label={t('publications_chart_wos_help_aria')}
+                >
+                  <CircleHelp size={14} />
+                </button>
+                <span className="publications-inline-help-tooltip" role="tooltip">
+                  <p>{t('publications_chart_wos_help_p1')}</p>
+                  <p>{t('publications_chart_wos_help_p2')}</p>
+                  <ul>
+                    <li>{t('publications_chart_wos_help_li1')}</li>
+                    <li>{t('publications_chart_wos_help_li2')}</li>
+                  </ul>
+                  <p>{t('publications_chart_wos_help_p3')}</p>
+                </span>
+              </span>
+            </h3>
           </header>
           <div className="chart-body">
             <Doughnut data={wosChartData} options={doughnutOptions} />
@@ -972,7 +1029,23 @@ const PublicationsPage: React.FC = () => {
 
         <article className="publications-chart-card chart-span-2">
           <header>
-            <h3>{t('publications_chart_implementation')}</h3>
+            <h3>
+              {t('publications_chart_implementation')}
+              <span className="publications-inline-help">
+                <button
+                  type="button"
+                  className="publications-inline-help-button"
+                  aria-label={t('publications_chart_implementation_help_aria')}
+                >
+                  <CircleHelp size={14} />
+                </button>
+                <span className="publications-inline-help-tooltip" role="tooltip">
+                  <p><strong>{t('publications_chart_implementation_help_title')}</strong></p>
+                  <p>{t('publications_chart_implementation_help_p1')}</p>
+                  <p>{t('publications_chart_implementation_help_p2')}</p>
+                </span>
+              </span>
+            </h3>
           </header>
           <div className="chart-body">
             <ChartComponent type="bar" data={implementationChartData} options={implementationChartOptions} />

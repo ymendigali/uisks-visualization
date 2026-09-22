@@ -105,6 +105,7 @@
 
 .publications-stats-scroll {
     display: flex;
+    flex-wrap: wrap;
     gap: 1rem;
     overflow-x: auto;
     overflow-y: hidden;
@@ -354,11 +355,92 @@
     margin: 0;
     font-size: 1.1rem;
     color: #0f172a;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
 }
 
 .publications-chart-card header p {
     margin: 0.25rem 0 0;
     color: #475569;
+}
+
+.publications-inline-help {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.publications-inline-help-button {
+    width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    border: 1px solid rgba(148, 163, 184, 0.5);
+    background: #ffffff;
+    color: #334155;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: help;
+    padding: 0;
+}
+
+.publications-inline-help-button:hover,
+.publications-inline-help-button:focus-visible {
+    background: #eff6ff;
+    color: #1e3a8a;
+}
+
+.publications-inline-help-tooltip {
+    position: absolute;
+    z-index: 20;
+    top: calc(100% + 10px);
+    left: 0;
+    width: min(420px, 70vw);
+    padding: 0.8rem 0.9rem;
+    border-radius: 12px;
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    background: #ffffff;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
+    color: #334155;
+    line-height: 1.4;
+    font-size: 0.8rem;
+    font-weight: 500;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateY(-4px);
+    transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.publications-inline-help-tooltip p {
+    margin: 0 0 0.5rem;
+}
+
+.publications-inline-help-tooltip ul {
+    margin: 0 0 0.5rem;
+    padding-left: 1.1rem;
+}
+
+.publications-inline-help-tooltip li {
+    margin-bottom: 0.2rem;
+}
+
+.publications-inline-help-tooltip p:last-child,
+.publications-inline-help-tooltip ul:last-child {
+    margin-bottom: 0;
+}
+
+.publications-inline-help:hover .publications-inline-help-tooltip,
+.publications-inline-help:focus-within .publications-inline-help-tooltip {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.publications-inline-help--align-right .publications-inline-help-tooltip {
+    left: auto;
+    right: 0;
 }
 
 .chart-body {
