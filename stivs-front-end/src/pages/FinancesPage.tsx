@@ -42,7 +42,7 @@ type PriorityDirection = 'all' | 'digital' | 'education' | 'biotech' | 'energy';
 type CompetitionName = 'all' | 'innovation' | 'grant2025' | 'pilot';
 type ApplicantType = 'all' | 'universities' | 'companies' | 'research';
 type CustomerType = 'all' | 'ministry' | 'state-companies' | 'private';
-type ProjectStatus = 'all' | 'active' | 'completed';
+type ProjectStatus = 'all' | 'active' | 'completed' | 'suspended';
 
 interface FilterState {
   irn: string;
@@ -117,6 +117,7 @@ const getFinancesOptions = (t: (key: string) => string) => ({
     { value: 'all', label: t('finances_option_all_statuses') },
     { value: 'active', label: t('finances_status_active') },
     { value: 'completed', label: t('finances_status_completed') },
+    { value: 'suspended', label: t('finances_status_suspended') },
   ],
 });
 

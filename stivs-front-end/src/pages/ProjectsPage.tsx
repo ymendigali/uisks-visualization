@@ -12,7 +12,7 @@ import DualScroll from '../components/DualScroll/DualScroll';
 import { exportPdfReport } from '../utils/exportPdfReport';
 import { translatePriority, translateProjectTitle } from '../utils/dataTranslations';
 
-type ProjectStatus = 'active' | 'completed' | 'draft';
+type ProjectStatus = 'active' | 'completed' | 'suspended' | 'draft';
 type TrlLevel = 3 | 4 | 5 | 6 | 7 | 8 | 9;
 type DropdownFilterKey = 'irn' | 'financingType' | 'applicant' | 'customer' | 'mrnti';
 
@@ -36,7 +36,7 @@ interface Project {
 	endYear: number;
 }
 
-const YEAR_RANGE = { min: 2021, max: 2025 } as const;
+const YEAR_RANGE = { min: 2021, max: 2028 } as const;
 const PAGE_LIMIT = 20;
 const DEFAULT_FILTERS: FilterState = {
 	search: '',
@@ -206,6 +206,9 @@ const toProjectStatus = (value: string): ProjectStatus => {
 	if (value === 'completed') {
 		return 'completed';
 	}
+	if (value === 'suspended') {
+		return 'suspended';
+	}
 	return 'draft';
 };
 
@@ -274,6 +277,7 @@ const ProjectsPage: React.FC = () => {
 		() => ({
 			active: t('projects_status_active'),
 			completed: t('projects_status_completed'),
+			suspended: t('projects_status_suspended'),
 			draft: t('projects_status_draft'),
 			in_progress: t('projects_status_in_progress'),
 		}),
