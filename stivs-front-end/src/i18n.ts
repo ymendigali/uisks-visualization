@@ -513,6 +513,7 @@ const resources = {
       "publications_chart_patents_subtitle": "Сравнение патентов и внедрений",
       "publications_chart_patents_label": "Патенты",
       "publications_chart_deployments": "Внедрения",
+      "publications_no_source_data": "Нет данных в источнике",
 
       "publications_priority_digitalization": "Цифровизация",
       "publications_priority_ai": "Искусственный интеллект",
@@ -1187,6 +1188,7 @@ const resources = {
       "publications_chart_patents_subtitle": "Патенттер мен енгізулер салыстыруы",
       "publications_chart_patents_label": "Патенттер",
       "publications_chart_deployments": "Енгізулер",
+      "publications_no_source_data": "Дереккөзде деректер жоқ",
 
       "publications_priority_digitalization": "Цифрландыру",
       "publications_priority_ai": "Жасанды интеллект",
@@ -1864,6 +1866,7 @@ const resources = {
       "publications_chart_patents_subtitle": "Comparison of patents and implementations",
       "publications_chart_patents_label": "Patents",
       "publications_chart_deployments": "Deployments",
+      "publications_no_source_data": "No data in the source",
 
       "publications_priority_digitalization": "Digitalization",
       "publications_priority_ai": "Artificial intelligence",

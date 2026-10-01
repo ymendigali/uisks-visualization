@@ -92,10 +92,9 @@ export interface FinanceFilterOptions {
   applicant: string[];
   customer: string[];
   status: string[];
-  yearRange?: {
-    min: number;
-    max: number;
-  };
+  yearRange?: number[];
+  minYear?: number;
+  maxYear?: number;
 }
 
 export interface FinanceFilterMeta {
@@ -260,4 +259,60 @@ export interface DashboardSummary {
     regionalPrograms: number;
   };
   byRegion: DashboardRegionSummary[];
+}
+
+export interface PublicationsAnalyticsQuery {
+  region?: string;
+  yearFrom?: number;
+  yearTo?: number;
+  irn?: string;
+  financingType?: string;
+  priority?: string;
+  contest?: string;
+  applicant?: string;
+  customer?: string;
+  mrnti?: string;
+  status?: string;
+}
+
+export interface PublicationsSummary {
+  total: number;
+  domestic: number;
+  foreign: number;
+  scopus: number;
+  wos: number;
+  patents: number;
+  implementations: number;
+  projects: number;
+}
+
+export interface PublicationsTimeseriesItem {
+  year: number;
+  total: number;
+  domestic: number;
+  foreign: number;
+  scopus: number;
+  wos: number;
+  patents: number;
+  implementations: number;
+}
+
+export interface PublicationsDistributions {
+  scopusWos: { scopus: number; wos: number };
+  priorities: Array<{ priority: string; value: number }>;
+  topApplicants: Array<{ name: string; value: number }>;
+  patentsVsImplementations: { patents: number; implementations: number };
+}
+
+export interface PublicationsAnalyticsFilterOptions {
+  irn: FilterOptionCountString[];
+  financingType: FilterOptionCountString[];
+  priority: FilterOptionCountString[];
+  contest: FilterOptionCountString[];
+  applicant: FilterOptionCountString[];
+  customer: FilterOptionCountString[];
+  mrnti: FilterOptionCountString[];
+  status: FilterOptionCountString[];
+  region: FilterOptionCountString[];
+  yearRange: { min: number | null; max: number | null };
 }

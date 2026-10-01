@@ -8,6 +8,7 @@ import { mapRegionToId, projectsApi } from '../api/services';
 import type { BackendProject } from '../api/types';
 import { useProjectsData } from '../hooks/useProjectsData';
 import PageLoader from '../components/PageLoader/PageLoader';
+import DualScroll from '../components/DualScroll/DualScroll';
 import { exportPdfReport } from '../utils/exportPdfReport';
 import { translatePriority, translateProjectTitle } from '../utils/dataTranslations';
 
@@ -1070,7 +1071,7 @@ const ProjectsPage: React.FC = () => {
 
 				<main className="projects-main">
 					<section className="projects-table-section">
-						<div className="projects-table-wrapper">
+						<DualScroll className="projects-table-wrapper">
 							<table className="projects-table">
 								<thead>
 									<tr>
@@ -1127,7 +1128,7 @@ const ProjectsPage: React.FC = () => {
 							{!isRefreshing && visibleProjects.length === 0 && (
 								<div className="no-results">{t('projects_not_found')}</div>
 							)}
-						</div>
+						</DualScroll>
 						<p className="projects-summary">
 							{t('projects_shown')} {visibleProjects.length} {t('projects_from_total')} {pageMeta.total}
 						</p>

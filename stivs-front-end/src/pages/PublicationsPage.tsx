@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState, useRef, type CSSProperties } from 'react';
 import { CircleHelp, Download } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Bar, Doughnut, Chart as ChartComponent } from 'react-chartjs-2';
+import { Bar } from 'react-chartjs-2';
 import {
   ArcElement,
   BarElement,
@@ -14,16 +14,14 @@ import {
   PointElement,
   Tooltip,
   type ChartOptions,
-  type ChartData,
 } from 'chart.js';
 import KazakhstanMap from '../components/Home/KazakhstanMap';
 import { useLocalRegionSelection } from '../hooks/useLocalRegionSelection';
 import type { RegionId } from '../context/RegionContext';
 import { formatNumber } from '../utils/metrics';
 import './PublicationsPage.css';
-import type { BackendPublication, PaginationMeta } from '../api/types';
-import { usePublicationsData } from '../hooks/usePublicationsData';
-import { projectsApi } from '../api/services';
+import type { FilterOptionCountString, PublicationsAnalyticsQuery, PublicationsSummary } from '../api/types';
+import { usePublicationsAnalytics } from '../hooks/usePublicationsAnalytics';
 import { translatePriority } from '../utils/dataTranslations';
 import PageLoader from '../components/PageLoader/PageLoader';
 
@@ -39,12 +37,12 @@ ChartJS.register(
   LineController,
 );
 
-const YEAR_RANGE = { min: 2020, max: 2025 } as const;
-const PAGE_LIMIT = 20;
+// Used until /analytics-filters reports the actual range of project periods.
+const DEFAULT_YEAR_RANGE = { min: 2023, max: 2028 } as const;
 
 interface FilterState {
-  startYear: number;
-  endYear: number;
+  startYear: number | null;
+  endYear: number | null;
   irn: string;
   financingType: string;
   priority: string;
@@ -53,12 +51,11 @@ interface FilterState {
   customer: string;
   mrnti: string;
   status: string;
-  trl: string;
 }
 
 const defaultFilters: FilterState = {
-  startYear: YEAR_RANGE.min,
-  endYear: YEAR_RANGE.max,
+  startYear: null,
+  endYear: null,
   irn: 'all',
   financingType: 'all',
   priority: 'all',
@@ -67,132 +64,22 @@ const defaultFilters: FilterState = {
   customer: 'all',
   mrnti: 'all',
   status: 'all',
-  trl: 'all',
 };
 
-const mrntiOptions = ['all', '11.00.00', '21.45.10', '27.00.00'];
-const trlOptions = ['all', 'TRL 3', 'TRL 4', 'TRL 5', 'TRL 6', 'TRL 7', 'TRL 8', 'TRL 9'];
-
-// Helper function to get translated publication filter options
-const getPublicationFilterOptions = (t: (key: string) => string) => ({
-  contests: [
-    { value: 'all', label: t('pub_contests_all') },
-    { value: 'national', label: t('pub_contests_national') },
-    { value: 'grants', label: t('pub_contests_grants') },
-    { value: 'programs', label: t('pub_contests_programs') },
-  ],
-  applicants: [
-    { value: 'all', label: t('pub_applicants_all') },
-    { value: 'kaznu', label: t('pub_applicants_kaznu') },
-    { value: 'enu', label: t('pub_applicants_enu') },
-    { value: 'nazarbayev', label: t('pub_applicants_nazarbayev') },
-    { value: 'kaztk', label: t('pub_applicants_kaztk') },
-  ],
-  customers: [
-    { value: 'all', label: t('pub_customers_all') },
-    { value: 'minedu', label: t('pub_customers_minedu') },
-    { value: 'minhealth', label: t('pub_customers_minhealth') },
-    { value: 'mindigital', label: t('pub_customers_mindigital') },
-  ],
-  statusOptions: [
-    { value: 'all', label: t('pub_status_all') },
-    { value: 'inprogress', label: t('pub_status_inprogress') },
-    { value: 'completed', label: t('pub_status_completed') },
-    { value: 'pending', label: t('pub_status_pending') },
-  ],
-});
-
-// Данные для графиков и карточек
-const publicationYears = ['2020', '2021', '2022', '2023', '2024', '2025'];
-const domesticPublications = [536, 1095, 1194, 1190, 976, 553];
-const foreignPublications = [858, 1719, 1698, 1799, 1347, 810];
-
-const scopusSiteScore = [5000, 5000, 2000, 2000];
-const wosQuartiles = [10000, 8000, 8000, 5000];
-
-const implementationTrend = {
-  implementation: [319, 634, 657, 617, 633, 305],
-  trl: [97, 219, 151, 129, 105, 58],
-};
-
-const patentTrend = {
-  patents: [58, 123, 126, 105, 95, 70],
-  deployments: [97, 219, 151, 129, 105, 58],
+const emptySummary: PublicationsSummary = {
+  total: 0,
+  domestic: 0,
+  foreign: 0,
+  scopus: 0,
+  wos: 0,
+  patents: 0,
+  implementations: 0,
+  projects: 0,
 };
 
 type CSSVars = CSSProperties & { '--accent'?: string };
 
-type BackendPaginationMeta = Partial<PaginationMeta> & {
-  total_pages?: number;
-  has_next_page?: boolean;
-  has_prev_page?: boolean;
-};
-
-const parsePositiveInt = (value: unknown): number | null => {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) {
-    return null;
-  }
-
-  const intValue = Math.floor(numeric);
-  return intValue > 0 ? intValue : null;
-};
-
-const parseNonNegativeInt = (value: unknown): number | null => {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) {
-    return null;
-  }
-
-  const intValue = Math.floor(numeric);
-  return intValue >= 0 ? intValue : null;
-};
-
-const normalizePageMeta = (meta: BackendPaginationMeta | undefined, fallbackPage: number): PaginationMeta => {
-  const limit = parsePositiveInt(meta?.limit) ?? PAGE_LIMIT;
-  const total = parseNonNegativeInt(meta?.total) ?? 0;
-  const backendTotalPages = parsePositiveInt(meta?.totalPages ?? meta?.total_pages);
-  const computedTotalPages = Math.max(Math.ceil(total / limit), 1);
-  const totalPages = backendTotalPages ?? computedTotalPages;
-  const backendPage = parsePositiveInt(meta?.page);
-  const requestedPage = Math.max(1, fallbackPage);
-  const page = Math.min(backendPage ?? requestedPage, totalPages);
-
-  const hasPrevPage = typeof meta?.hasPrevPage === 'boolean'
-    ? meta.hasPrevPage
-    : typeof meta?.has_prev_page === 'boolean'
-      ? meta.has_prev_page
-      : page > 1;
-
-  const hasNextPage = typeof meta?.hasNextPage === 'boolean'
-    ? meta.hasNextPage
-    : typeof meta?.has_next_page === 'boolean'
-      ? meta.has_next_page
-      : page < totalPages;
-
-  return {
-    page,
-    limit,
-    total,
-    totalPages,
-    hasNextPage,
-    hasPrevPage,
-  };
-};
-
-const getHighlightCards = (
-  t: (key: string) => string,
-  stats: {
-    total: number;
-    domestic: number;
-    foreign: number;
-    scopus: number;
-    wos: number;
-    patents: number;
-    implementations: number;
-    projects: number;
-  },
-) => [
+const getHighlightCards = (t: (key: string) => string, stats: PublicationsSummary) => [
   { id: 'total', label: t('publications_card_total'), value: formatNumber(stats.total), accent: '#1d4ed8' },
   { id: 'domestic', label: t('publications_card_domestic'), value: formatNumber(stats.domestic), accent: '#16a34a' },
   { id: 'foreign', label: t('publications_card_foreign'), value: formatNumber(stats.foreign), accent: '#7c3aed' },
@@ -208,44 +95,10 @@ const getHighlightCards = (
   { id: 'projects', label: t('publications_card_projects'), value: formatNumber(stats.projects), accent: '#059669' },
 ];
 
-const getPriorityPerformance = (t: (key: string) => string) => [
-  { label: t('publications_priority_digitalization'), value: 3279 },
-  { label: t('publications_priority_ai'), value: 1005 },
-  { label: t('publications_priority_medicine'), value: 674 },
-  { label: t('publications_priority_geology'), value: 577 },
-  { label: t('publications_priority_life_sciences'), value: 404 },
-  { label: t('publications_priority_intellectual'), value: 386 },
-  { label: t('publications_priority_sustainable_resources'), value: 378 },
-  { label: t('publications_priority_ict'), value: 377 },
-  { label: t('publications_priority_energy'), value: 331 },
-  { label: t('publications_priority_sustainable_development'), value: 224 },
-  { label: t('publications_priority_national_security'), value: 121 },
-  { label: t('publications_priority_advanced_manufacturing'), value: 58 },
-  { label: t('publications_priority_ecology'), value: 44 },
-  { label: t('publications_priority_culture'), value: 11 },
-  { label: t('publications_priority_youth'), value: 4 },
-];
-
-const getTopApplicants = (
-  t: (key: string) => string,
-  publications: BackendPublication[],
-): Array<{ id: string; name: string; value: number }> => {
-  const byApplicant = new Map<string, number>();
-
-  publications.forEach((publication) => {
-    const firstAuthor = publication.authors[0] || t('not_available_short');
-    byApplicant.set(firstAuthor, (byApplicant.get(firstAuthor) ?? 0) + 1);
-  });
-
-  return Array.from(byApplicant.entries())
-    .map(([name, value]) => ({
-      id: name,
-      name,
-      value,
-    }))
-    .sort((a, b) => b.value - a.value)
-    .slice(0, 5);
-};
+const toSelectOptions = (
+  options: FilterOptionCountString[] | undefined,
+  formatLabel: (value: string) => string = (value) => value,
+) => (options ?? []).map((option) => ({ value: option.value, label: formatLabel(option.value) }));
 
 const filterSelect = (
   id: string,
@@ -277,107 +130,64 @@ const PublicationsPage: React.FC = () => {
   const { selectedRegion, selectedRegionId, setSelectedRegionId, regions } = useLocalRegionSelection();
   const [filters, setFilters] = useState<FilterState>(defaultFilters);
 
-  const {
-    publicationsData,
-    isLoading,
-    hasLoaded,
-    loadError,
-    publicationFilters,
-    publicationFiltersMeta,
-    pageMeta,
-  } = usePublicationsData({
-    filters,
-    currentPage: 1,
-    pageLimit: PAGE_LIMIT,
-    normalizeMeta: normalizePageMeta,
-  });
   const statsScrollRef = useRef<HTMLDivElement | null>(null);
   const statsDragRef = useRef<{ pointerId: number | null; startX: number; scrollLeft: number }>(
     { pointerId: null, startX: 0, scrollLeft: 0 },
   );
   const [isDraggingStats, setIsDraggingStats] = useState(false);
 
-  const [realIrnOptions, setRealIrnOptions] = useState<string[]>([]);
-  const [realPriorityOptions, setRealPriorityOptions] = useState<string[]>([]);
-  useEffect(() => {
-    const controller = new AbortController();
-    projectsApi
-      .filters()
-      .then((payload) => {
-        if (!controller.signal.aborted) {
-          setRealIrnOptions(payload.irn ?? []);
-          setRealPriorityOptions(payload.priority ?? []);
-        }
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) {
-          setRealIrnOptions([]);
-          setRealPriorityOptions([]);
-        }
-      });
-    return () => controller.abort();
-  }, []);
-  const irnOptions = useMemo(() => ['all', ...realIrnOptions], [realIrnOptions]);
+  const [yearBounds, setYearBounds] = useState<{ min: number; max: number }>(DEFAULT_YEAR_RANGE);
+  const startYear = filters.startYear ?? yearBounds.min;
+  const endYear = filters.endYear ?? yearBounds.max;
 
-  // Get translated filter options
-  const translatedFilterOptions = useMemo(() => getPublicationFilterOptions(t), [t]);
-  const publicationTypeOptions = useMemo(
-    () =>
-      publicationFilters?.type.length
-        ? publicationFilters.type.map((value) => {
-            const count = publicationFiltersMeta?.type.find((item) => item.value === value)?.count;
-            return { value, label: count !== undefined ? `${value} (${count})` : value };
-          })
-        : [
-            { value: 'grant', label: t('pub_financing_grant') },
-            { value: 'program', label: t('pub_financing_program') },
-            { value: 'contract', label: t('pub_financing_contract') },
-          ],
-    [publicationFilters?.type, publicationFiltersMeta?.type, t],
+  const analyticsQuery = useMemo<PublicationsAnalyticsQuery>(() => {
+    const pick = (value: string) => (value === 'all' ? undefined : value);
+    const isFullRange = startYear <= yearBounds.min && endYear >= yearBounds.max;
+    return {
+      region: selectedRegionId !== 'national' ? selectedRegion?.name : undefined,
+      yearFrom: isFullRange ? undefined : startYear,
+      yearTo: isFullRange ? undefined : endYear,
+      irn: pick(filters.irn),
+      financingType: pick(filters.financingType),
+      priority: pick(filters.priority),
+      contest: pick(filters.contest),
+      applicant: pick(filters.applicant),
+      customer: pick(filters.customer),
+      mrnti: pick(filters.mrnti),
+      status: pick(filters.status),
+    };
+  }, [filters, selectedRegion?.name, selectedRegionId, startYear, endYear, yearBounds]);
+
+  const { filterOptions, data, isLoading, hasLoaded, loadError } = usePublicationsAnalytics(analyticsQuery);
+
+  useEffect(() => {
+    const min = filterOptions?.yearRange.min;
+    const max = filterOptions?.yearRange.max;
+    if (min && max && min < max) {
+      setYearBounds({ min, max });
+    }
+  }, [filterOptions?.yearRange.min, filterOptions?.yearRange.max]);
+
+  const irnOptions = useMemo(() => toSelectOptions(filterOptions?.irn), [filterOptions?.irn]);
+  const financingTypeOptions = useMemo(() => toSelectOptions(filterOptions?.financingType), [filterOptions?.financingType]);
+  const priorityOptions = useMemo(
+    () => toSelectOptions(filterOptions?.priority, (value) => translatePriority(value, i18n.language)),
+    [filterOptions?.priority, i18n.language],
   );
-  const applicantOptions = useMemo(
-    () =>
-      publicationFilters?.applicant.length
-        ? publicationFilters.applicant.map((value) => {
-            const count = publicationFiltersMeta?.applicant.find((item) => item.value === value)?.count;
-            return { value, label: count !== undefined ? `${value} (${count})` : value };
-          })
-        : translatedFilterOptions.applicants.filter((option) => option.value !== 'all'),
-    [publicationFilters?.applicant, publicationFiltersMeta?.applicant, translatedFilterOptions.applicants],
-  );
-  const publicationsAvailableCounts = useMemo(
-    () => ({
-      irn: Math.max(irnOptions.length - 1, 0),
-      financingType: publicationTypeOptions.length,
-      priority: realPriorityOptions.length,
-      contest: Math.max(translatedFilterOptions.contests.length - 1, 0),
-      applicant: applicantOptions.length,
-      customer: Math.max(translatedFilterOptions.customers.length - 1, 0),
-      mrnti: Math.max(mrntiOptions.length - 1, 0),
-      status: Math.max(translatedFilterOptions.statusOptions.length - 1, 0),
-      region: regions.length,
-      trl: Math.max(trlOptions.length - 1, 0),
-    }),
-    [
-      applicantOptions,
-      irnOptions,
-      publicationTypeOptions,
-      realPriorityOptions,
-      regions,
-      translatedFilterOptions.contests,
-      translatedFilterOptions.customers,
-      translatedFilterOptions.statusOptions,
-    ],
-  );
+  const contestOptions = useMemo(() => toSelectOptions(filterOptions?.contest), [filterOptions?.contest]);
+  const applicantOptions = useMemo(() => toSelectOptions(filterOptions?.applicant), [filterOptions?.applicant]);
+  const customerOptions = useMemo(() => toSelectOptions(filterOptions?.customer), [filterOptions?.customer]);
+  const mrntiOptions = useMemo(() => toSelectOptions(filterOptions?.mrnti), [filterOptions?.mrnti]);
+  const statusOptions = useMemo(() => toSelectOptions(filterOptions?.status), [filterOptions?.status]);
 
   const handleRangeChange = (key: 'startYear' | 'endYear', value: number) => {
     setFilters((prev) => {
+      const prevStart = prev.startYear ?? yearBounds.min;
+      const prevEnd = prev.endYear ?? yearBounds.max;
       if (key === 'startYear') {
-        const nextStart = Math.min(value, prev.endYear);
-        return { ...prev, startYear: nextStart };
+        return { ...prev, startYear: Math.min(value, prevEnd), endYear: prevEnd };
       }
-      const nextEnd = Math.max(value, prev.startYear);
-      return { ...prev, endYear: nextEnd };
+      return { ...prev, startYear: prevStart, endYear: Math.max(value, prevStart) };
     });
   };
 
@@ -442,91 +252,40 @@ const PublicationsPage: React.FC = () => {
   );
 
   const rangeBackgroundStyle = useMemo(() => {
-    const total = YEAR_RANGE.max - YEAR_RANGE.min;
-    const startPercent = ((filters.startYear - YEAR_RANGE.min) / total) * 100;
-    const endPercent = ((filters.endYear - YEAR_RANGE.min) / total) * 100;
+    const total = Math.max(yearBounds.max - yearBounds.min, 1);
+    const startPercent = ((startYear - yearBounds.min) / total) * 100;
+    const endPercent = ((endYear - yearBounds.min) / total) * 100;
     return {
       '--range-start': `${startPercent}%`,
       '--range-end': `${endPercent}%`,
     } as CSSProperties;
-  }, [filters.startYear, filters.endYear]);
+  }, [startYear, endYear, yearBounds]);
 
-  const visiblePublications = useMemo(
-    () =>
-      publicationsData.filter((publication) => {
-        const matchesYear = publication.year >= filters.startYear && publication.year <= filters.endYear;
-        return matchesYear;
-      }),
-    [publicationsData, filters.startYear, filters.endYear],
-  );
-
-  const publicationYearsData = useMemo(() => {
-    const years: string[] = [];
-    for (let year = filters.startYear; year <= filters.endYear; year += 1) {
-      years.push(String(year));
-    }
-    return years;
-  }, [filters.startYear, filters.endYear]);
-
-  const publicationsByYear = useMemo(() => {
-    const map = new Map<number, number>();
-    visiblePublications.forEach((publication) => {
-      map.set(publication.year, (map.get(publication.year) ?? 0) + 1);
-    });
-    return map;
-  }, [visiblePublications]);
-
-  const domesticPublicationsData = useMemo(
-    () => publicationYearsData.map((year) => publicationsByYear.get(Number(year)) ?? 0),
-    [publicationYearsData, publicationsByYear],
-  );
-
-  const foreignPublicationsData = useMemo(
-    () => publicationYearsData.map(() => 0),
-    [publicationYearsData],
-  );
-
-  const publicationsStats = useMemo(() => {
-    const total = visiblePublications.length;
-    const patents = visiblePublications.filter((item) => item.type === 'patent').length;
-    const scopus = visiblePublications.filter((item) => item.type === 'journal').length;
-    const wos = visiblePublications.filter((item) => item.type === 'conference').length;
-    const implementations = visiblePublications.filter((item) => item.pdfUrl || item.link).length;
-    const projects = new Set(visiblePublications.map((item) => item.projectId).filter(Boolean)).size;
-
-    return {
-      total,
-      domestic: total,
-      foreign: 0,
-      scopus,
-      wos,
-      patents,
-      implementations,
-      projects,
-    };
-  }, [visiblePublications]);
+  const summary = data?.summary ?? emptySummary;
+  const timeseries = useMemo(() => data?.timeseries ?? [], [data?.timeseries]);
+  const timeseriesLabels = useMemo(() => timeseries.map((item) => String(item.year)), [timeseries]);
 
   const publicationDynamicsData = useMemo(
     () => ({
-      labels: publicationsData.length ? publicationYearsData : publicationYears,
+      labels: timeseriesLabels,
       datasets: [
         {
           label: t('publications_chart_domestic'),
-          data: publicationsData.length ? domesticPublicationsData : domesticPublications,
+          data: timeseries.map((item) => item.domestic),
           backgroundColor: '#1d4ed8',
           borderRadius: 10,
           stack: 'publications',
         },
         {
           label: t('publications_chart_foreign'),
-          data: publicationsData.length ? foreignPublicationsData : foreignPublications,
+          data: timeseries.map((item) => item.foreign),
           backgroundColor: '#60a5fa',
           borderRadius: 10,
           stack: 'publications',
         },
       ],
     }),
-    [t, publicationsData.length, publicationYearsData, domesticPublicationsData, foreignPublicationsData],
+    [t, timeseries, timeseriesLabels],
   );
 
   const publicationDynamicsOptions = useMemo<ChartOptions<'bar'>>(
@@ -537,7 +296,7 @@ const PublicationsPage: React.FC = () => {
         legend: { position: 'bottom' },
         tooltip: {
           callbacks: {
-            label: (context) => `${context.dataset.label}: ${formatNumber(Number(context.raw))}`,
+            label: (context) => `${context.dataset.label}: ${formatNumber(Math.round(Number(context.raw)))}`,
           },
         },
       },
@@ -559,54 +318,14 @@ const PublicationsPage: React.FC = () => {
     [],
   );
 
-  const scopusChartData = useMemo(
-    () => ({
-      labels: ['90%', '80%', '70%', '60%'],
-      datasets: [
-        {
-          data: scopusSiteScore,
-          backgroundColor: ['#0ea5e9', '#1d4ed8', '#ea580c', '#6d28d9'],
-          borderWidth: 0,
-        },
-      ],
-    }),
-    [],
+  const priorityPerformance = useMemo(
+    () =>
+      (data?.distributions.priorities ?? []).map((item) => ({
+        label: translatePriority(item.priority, i18n.language),
+        value: item.value,
+      })),
+    [data?.distributions.priorities, i18n.language],
   );
-
-  const doughnutOptions = useMemo<ChartOptions<'doughnut'>>(
-    () => ({
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          position: 'bottom',
-          labels: { usePointStyle: true, pointStyle: 'circle' },
-        },
-        tooltip: {
-          callbacks: {
-            label: (context) => `${context.label}: ${formatNumber(Number(context.raw))}`,
-          },
-        },
-      },
-    }),
-    [],
-  );
-
-  const wosChartData = useMemo(
-    () => ({
-      labels: ['Q1', 'Q2', 'Q3', 'Q4'],
-      datasets: [
-        {
-          data: wosQuartiles,
-          backgroundColor: ['#0ea5e9', '#1d4ed8', '#ea580c', '#6d28d9'],
-          borderWidth: 0,
-        },
-      ],
-    }),
-    [],
-  );
-
-  const priorityPerformance = useMemo(() => getPriorityPerformance(t), [t]);
 
   const priorityChartData = useMemo(
     () => ({
@@ -651,89 +370,17 @@ const PublicationsPage: React.FC = () => {
     [],
   );
 
-  const implementationChartData = useMemo<ChartData<'bar' | 'line'>>(
-    () => ({
-      labels: publicationsData.length ? publicationYearsData : publicationYears,
-      datasets: [
-        {
-          type: 'bar' as const,
-          label: t('publications_chart_implementations_projects'),
-          data: implementationTrend.implementation,
-          backgroundColor: '#38bdf8',
-          borderRadius: 12,
-          maxBarThickness: 36,
-          yAxisID: 'y',
-        },
-        {
-          type: 'line' as const,
-          label: t('publications_chart_implementations_trl'),
-          data: implementationTrend.trl,
-          borderColor: '#0f172a',
-          backgroundColor: '#0f172a',
-          borderWidth: 3,
-          tension: 0.35,
-          pointRadius: 4,
-          yAxisID: 'y1',
-        },
-      ],
-    }),
-    [t, publicationsData.length, publicationYearsData],
-  );
-
-  const implementationChartOptions = useMemo<ChartOptions<'bar' | 'line'>>(
+  const yearlyBarOptions = useMemo<ChartOptions<'bar'>>(
     () => ({
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
         legend: { position: 'bottom' },
-      },
-      scales: {
-        y: {
-          beginAtZero: true,
-          grid: { color: 'rgba(226,232,240,0.6)', drawBorder: false },
+        tooltip: {
+          callbacks: {
+            label: (context) => `${context.dataset.label}: ${formatNumber(Math.round(Number(context.raw)))}`,
+          },
         },
-        y1: {
-          beginAtZero: true,
-          position: 'right',
-          grid: { drawOnChartArea: false },
-        },
-        x: {
-          grid: { display: false },
-        },
-      },
-    }),
-    [],
-  );
-
-  const patentsChartData = useMemo(
-    () => ({
-      labels: publicationsData.length ? publicationYearsData : publicationYears,
-      datasets: [
-        {
-          label: t('publications_chart_patents_label'),
-          data: patentTrend.patents,
-          backgroundColor: '#1d4ed8',
-          borderRadius: 12,
-          maxBarThickness: 32,
-        },
-        {
-          label: t('publications_chart_deployments'),
-          data: patentTrend.deployments,
-          backgroundColor: '#0ea5e9',
-          borderRadius: 12,
-          maxBarThickness: 32,
-        },
-      ],
-    }),
-    [t, publicationsData.length, publicationYearsData],
-  );
-
-  const patentsChartOptions = useMemo<ChartOptions<'bar'>>(
-    () => ({
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { position: 'bottom' },
       },
       scales: {
         x: { grid: { display: false } },
@@ -743,8 +390,50 @@ const PublicationsPage: React.FC = () => {
     [],
   );
 
-  const highlightCards = useMemo(() => getHighlightCards(t, publicationsStats), [t, publicationsStats]);
-  const topApplicants = useMemo(() => getTopApplicants(t, visiblePublications), [t, visiblePublications]);
+  const implementationChartData = useMemo(
+    () => ({
+      labels: timeseriesLabels,
+      datasets: [
+        {
+          label: t('publications_chart_implementations_projects'),
+          data: timeseries.map((item) => item.implementations),
+          backgroundColor: '#38bdf8',
+          borderRadius: 12,
+          maxBarThickness: 36,
+        },
+      ],
+    }),
+    [t, timeseries, timeseriesLabels],
+  );
+
+  const patentsChartData = useMemo(
+    () => ({
+      labels: timeseriesLabels,
+      datasets: [
+        {
+          label: t('publications_chart_patents_label'),
+          data: timeseries.map((item) => item.patents),
+          backgroundColor: '#1d4ed8',
+          borderRadius: 12,
+          maxBarThickness: 32,
+        },
+        {
+          label: t('publications_chart_deployments'),
+          data: timeseries.map((item) => item.implementations),
+          backgroundColor: '#0ea5e9',
+          borderRadius: 12,
+          maxBarThickness: 32,
+        },
+      ],
+    }),
+    [t, timeseries, timeseriesLabels],
+  );
+
+  const highlightCards = useMemo(() => getHighlightCards(t, summary), [t, summary]);
+  const topApplicants = useMemo(
+    () => (data?.distributions.topApplicants ?? []).map((item) => ({ id: item.name, ...item })),
+    [data?.distributions.topApplicants],
+  );
   const totalApplicantPublications = topApplicants.reduce((sum, applicant) => sum + applicant.value, 0);
   const isDataPending = !hasLoaded && isLoading;
   const isRefreshing = hasLoaded && isLoading;
@@ -755,7 +444,7 @@ const PublicationsPage: React.FC = () => {
           <h1>{t('publications_page_heading')}</h1>
           <p>
             {t('publications_page_description')}
-            {` Всего: ${pageMeta.total}`}
+            {` Всего: ${formatNumber(summary.total)}`}
           </p>
           {loadError && <p>{loadError}</p>}
         </div>
@@ -823,24 +512,24 @@ const PublicationsPage: React.FC = () => {
             <div className="publications-filter-title">{t('publications_filters_years_title')}</div>
             <div className="period-range-slider" style={rangeBackgroundStyle}>
               <div className="period-range-values">
-                <span className="period-range-value">{filters.startYear}</span>
-                <span className="period-range-value">{filters.endYear}</span>
+                <span className="period-range-value">{startYear}</span>
+                <span className="period-range-value">{endYear}</span>
               </div>
               <div className="period-range-track" />
               <div className="period-range-inputs">
                 <input
                   type="range"
-                  min={YEAR_RANGE.min}
-                  max={YEAR_RANGE.max}
-                  value={filters.startYear}
+                  min={yearBounds.min}
+                  max={yearBounds.max}
+                  value={startYear}
                   onChange={(event) => handleRangeChange('startYear', Number(event.target.value))}
                   className="period-range-thumb"
                 />
                 <input
                   type="range"
-                  min={YEAR_RANGE.min}
-                  max={YEAR_RANGE.max}
-                  value={filters.endYear}
+                  min={yearBounds.min}
+                  max={yearBounds.max}
+                  value={endYear}
                   onChange={(event) => handleRangeChange('endYear', Number(event.target.value))}
                   className="period-range-thumb period-range-thumb--upper"
                 />
@@ -853,39 +542,33 @@ const PublicationsPage: React.FC = () => {
               'filter-irn',
               t('projects_label_irn'),
               filters.irn,
-              irnOptions.map((value) => ({ value, label: value === 'all' ? t('projects_filter_irn') : value })),
+              [{ value: 'all', label: t('projects_filter_irn') }, ...irnOptions],
               (value) => handleSelectChange('irn', value),
-              publicationsAvailableCounts.irn,
+              irnOptions.length,
             )}
             {filterSelect(
               'filter-financing',
               t('pub_filter_financing_type'),
               filters.financingType,
-              [
-                { value: 'all', label: t('fin_all_types') },
-                ...publicationTypeOptions,
-              ],
+              [{ value: 'all', label: t('fin_all_types') }, ...financingTypeOptions],
               (value) => handleSelectChange('financingType', value),
-              publicationsAvailableCounts.financingType,
+              financingTypeOptions.length,
             )}
             {filterSelect(
               'filter-priority',
               t('pub_filter_priority_direction'),
               filters.priority,
-              [
-                { value: 'all', label: t('pub_priority_all') },
-                ...realPriorityOptions.map((value) => ({ value, label: translatePriority(value, i18n.language) })),
-              ],
+              [{ value: 'all', label: t('pub_priority_all') }, ...priorityOptions],
               (value) => handleSelectChange('priority', value),
-              publicationsAvailableCounts.priority,
+              priorityOptions.length,
             )}
             {filterSelect(
               'filter-contest',
               t('pub_filter_contest_name'),
               filters.contest,
-              translatedFilterOptions.contests,
+              [{ value: 'all', label: t('pub_contests_all') }, ...contestOptions],
               (value) => handleSelectChange('contest', value),
-              publicationsAvailableCounts.contest,
+              contestOptions.length,
             )}
             {filterSelect(
               'filter-applicant',
@@ -893,36 +576,36 @@ const PublicationsPage: React.FC = () => {
               filters.applicant,
               [{ value: 'all', label: t('pub_applicants_all') }, ...applicantOptions],
               (value) => handleSelectChange('applicant', value),
-              publicationsAvailableCounts.applicant,
+              applicantOptions.length,
             )}
             {filterSelect(
               'filter-customer',
               t('pub_filter_customer'),
               filters.customer,
-              translatedFilterOptions.customers,
+              [{ value: 'all', label: t('pub_customers_all') }, ...customerOptions],
               (value) => handleSelectChange('customer', value),
-              publicationsAvailableCounts.customer,
+              customerOptions.length,
             )}
             {filterSelect(
               'filter-mrnti',
               t('pub_filter_mrnti'),
               filters.mrnti,
-              mrntiOptions.map((value) => ({ value, label: value === 'all' ? t('fin_all_types') : value })),
+              [{ value: 'all', label: t('fin_all_types') }, ...mrntiOptions],
               (value) => handleSelectChange('mrnti', value),
-              publicationsAvailableCounts.mrnti,
+              mrntiOptions.length,
             )}
             {filterSelect(
               'filter-status',
               t('pub_filter_status'),
               filters.status,
-              translatedFilterOptions.statusOptions,
+              [{ value: 'all', label: t('pub_status_all') }, ...statusOptions],
               (value) => handleSelectChange('status', value),
-              publicationsAvailableCounts.status,
+              statusOptions.length,
             )}
             <label className="publications-filter-item" htmlFor="filter-region">
               <span>
                 {t('pub_filter_region')}
-                <small className="publications-filter-badge">доступно {publicationsAvailableCounts.region}</small>
+                <small className="publications-filter-badge">доступно {regions.length}</small>
               </span>
               <select
                 id="filter-region"
@@ -937,14 +620,6 @@ const PublicationsPage: React.FC = () => {
                 ))}
               </select>
             </label>
-            {filterSelect(
-              'filter-trl',
-              'TRL',
-              filters.trl,
-              trlOptions.map((value) => ({ value, label: value === 'all' ? t('fin_all_types') : value })),
-              (value) => handleSelectChange('trl', value),
-              publicationsAvailableCounts.trl,
-            )}
           </div>
 
           <div className="publications-filter-actions">
@@ -984,7 +659,7 @@ const PublicationsPage: React.FC = () => {
             </h3>
           </header>
           <div className="chart-body">
-            <Doughnut data={scopusChartData} options={doughnutOptions} />
+            <div className="publications-chart-empty">{t('publications_no_source_data')}</div>
           </div>
         </article>
 
@@ -1013,7 +688,7 @@ const PublicationsPage: React.FC = () => {
             </h3>
           </header>
           <div className="chart-body">
-            <Doughnut data={wosChartData} options={doughnutOptions} />
+            <div className="publications-chart-empty">{t('publications_no_source_data')}</div>
           </div>
         </article>
       </section>
@@ -1049,7 +724,7 @@ const PublicationsPage: React.FC = () => {
             </h3>
           </header>
           <div className="chart-body">
-            <ChartComponent type="bar" data={implementationChartData} options={implementationChartOptions} />
+            <Bar data={implementationChartData} options={yearlyBarOptions} />
           </div>
         </article>
       </section>
@@ -1061,7 +736,7 @@ const PublicationsPage: React.FC = () => {
           </header>
           <div className="top-applicants-list">
             {topApplicants.map((applicant) => {
-              const share = (applicant.value / totalApplicantPublications) * 100;
+              const share = totalApplicantPublications > 0 ? (applicant.value / totalApplicantPublications) * 100 : 0;
               return (
                 <div key={applicant.id} className="top-applicant-row">
                   <div>
@@ -1087,7 +762,7 @@ const PublicationsPage: React.FC = () => {
             <p>{t('publications_chart_patents_subtitle')}</p>
           </header>
           <div className="chart-body">
-            <Bar data={patentsChartData} options={patentsChartOptions} />
+            <Bar data={patentsChartData} options={yearlyBarOptions} />
           </div>
         </article>
       </section>

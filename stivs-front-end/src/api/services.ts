@@ -17,6 +17,11 @@ import type {
   ProjectFilterOptions,
   PublicationFilterOptions,
   PublicationFilterMeta,
+  PublicationsAnalyticsFilterOptions,
+  PublicationsAnalyticsQuery,
+  PublicationsDistributions,
+  PublicationsSummary,
+  PublicationsTimeseriesItem,
   UserRole,
 } from './types';
 
@@ -312,6 +317,25 @@ export const publicationsApi = {
 
   filtersMeta(query?: { year?: number; type?: string; q?: string }, signal?: AbortSignal) {
     return apiRequest<PublicationFilterMeta>(withQuery('/api/publications/filters-meta', query), { signal });
+  },
+
+  summary(query?: PublicationsAnalyticsQuery, signal?: AbortSignal) {
+    return apiRequest<PublicationsSummary>(withQuery('/api/publications/summary', { ...query }), { signal });
+  },
+
+  timeseries(query?: PublicationsAnalyticsQuery, signal?: AbortSignal) {
+    return apiRequest<{ items: PublicationsTimeseriesItem[] }>(
+      withQuery('/api/publications/timeseries', { ...query }),
+      { signal },
+    );
+  },
+
+  distributions(query?: PublicationsAnalyticsQuery, signal?: AbortSignal) {
+    return apiRequest<PublicationsDistributions>(withQuery('/api/publications/distributions', { ...query }), { signal });
+  },
+
+  analyticsFilters(signal?: AbortSignal) {
+    return apiRequest<PublicationsAnalyticsFilterOptions>('/api/publications/analytics-filters', { signal });
   },
 };
 

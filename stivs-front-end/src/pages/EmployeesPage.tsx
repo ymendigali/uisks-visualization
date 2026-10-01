@@ -10,6 +10,7 @@ import type { BackendEmployee } from '../api/types';
 import { H_INDEX_RANGE_BY_GROUP, useEmployeesData } from '../hooks/useEmployeesData';
 import SearchableSelect from '../components/SearchableSelect/SearchableSelect';
 import PageLoader from '../components/PageLoader/PageLoader';
+import DualScroll from '../components/DualScroll/DualScroll';
 import { exportPdfReport } from '../utils/exportPdfReport';
 import { translateDegree, translateGender } from '../utils/dataTranslations';
 
@@ -108,6 +109,8 @@ const employeeColumnDefinitions: EmployeeColumnDefinition[] = [
   { key: 'age', label: 'Возраст', sortKey: 'age' },
 ];
 
+const EMPLOYEE_COLUMN_MIN_WIDTH = 220;
+
 const defaultVisibleEmployeeColumns: Record<EmployeeColumnKey, boolean> = employeeColumnDefinitions.reduce(
   (acc, column) => ({
     ...acc,
@@ -116,7 +119,7 @@ const defaultVisibleEmployeeColumns: Record<EmployeeColumnKey, boolean> = employ
   {} as Record<EmployeeColumnKey, boolean>,
 );
 
-const initiallyHiddenColumns: EmployeeColumnKey[] = ['position', 'hIndexScopus', 'hIndex', 'age'];
+const initiallyHiddenColumns: EmployeeColumnKey[] = ['position', 'age'];
 
 const initialVisibleEmployeeColumns: Record<EmployeeColumnKey, boolean> = {
   ...defaultVisibleEmployeeColumns,
@@ -932,8 +935,8 @@ const EmployeesPage: React.FC = () => {
         </aside>
 <main className="employees-main">
           <section className="employees-table-section">
-            <div className="employee-table-container">
-              <table className="employee-table">
+            <DualScroll className="employee-table-container">
+              <table className="employee-table" style={{ minWidth: activeColumns.length * EMPLOYEE_COLUMN_MIN_WIDTH }}>
                 <thead>
                   <tr>
                     {activeColumns.map((column) => {
@@ -995,7 +998,7 @@ const EmployeesPage: React.FC = () => {
               {!isRefreshing && filteredEmployees.length === 0 && (
                 <div className="no-results">{t('employees_not_found')}</div>
               )}
-            </div>
+            </DualScroll>
             <p className="employees-summary">
               {t('show_employees_summary')}{filteredEmployees.length} {t('from_total_summary')}{pageMeta.total}
             </p>

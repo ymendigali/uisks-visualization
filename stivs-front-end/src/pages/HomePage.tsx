@@ -389,6 +389,7 @@ const HomePage: React.FC = () => {
               onRegionSelect={handleRegionSelect}
               getRegionTooltip={getRegionTooltip}
               showLabels={false}
+              showCityLabels={false}
             />
 
             <aside className="map-info">

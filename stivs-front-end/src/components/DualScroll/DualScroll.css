@@ -1,0 +1,5 @@
+.dual-scroll-top {
+  overflow-x: auto;
+  overflow-y: hidden;
+  margin-bottom: 0.5rem;
+}

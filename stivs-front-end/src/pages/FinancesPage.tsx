@@ -275,10 +275,12 @@ const FinancesPage: React.FC = () => {
 
   const periodRange = useMemo(
     () => ({
-      min: apiFilterOptions?.yearRange?.min ?? apiFilterMeta?.minYear ?? FINANCES_PERIOD_RANGE.min,
-      max: apiFilterOptions?.yearRange?.max ?? apiFilterMeta?.maxYear ?? FINANCES_PERIOD_RANGE.max,
+      // Bounds come from the unfiltered /filters payload: filters-meta depends on the selected
+      // period itself, so using it here would collapse the slider to 0—0 on empty results.
+      min: apiFilterOptions?.minYear || FINANCES_PERIOD_RANGE.min,
+      max: apiFilterOptions?.maxYear || FINANCES_PERIOD_RANGE.max,
     }),
-    [apiFilterMeta?.maxYear, apiFilterMeta?.minYear, apiFilterOptions?.yearRange?.max, apiFilterOptions?.yearRange?.min],
+    [apiFilterOptions?.maxYear, apiFilterOptions?.minYear],
   );
 
   useEffect(() => {
@@ -322,7 +324,6 @@ const FinancesPage: React.FC = () => {
       irn: toQueryValue(filters.irn),
       financingType: toQueryValue(filters.financingType),
       cofinancing: toQueryValue(filters.cofinancing),
-      expense: toQueryValue(filters.expense),
       priority: toQueryValue(filters.priority),
       competition: toQueryValue(filters.competition),
       applicant: toQueryValue(filters.applicant),
@@ -335,7 +336,6 @@ const FinancesPage: React.FC = () => {
       filters.competition,
       filters.customer,
       filters.endYear,
-      filters.expense,
       filters.financingType,
       filters.irn,
       filters.priority,
@@ -860,7 +860,24 @@ const FinancesPage: React.FC = () => {
 
   const handleIrnChange = useCallback(
     (event: React.ChangeEvent<HTMLSelectElement>) => {
-      setFilters((prev) => ({ ...prev, irn: event.target.value }));
+      const irn = event.target.value;
+      setFilters((prev) => ({ ...prev, irn }));
+      if (irn === 'all') {
+        return;
+      }
+
+      // Snap the period to the selected project's years so it isn't filtered out by the default range.
+      financesApi
+        .filtersMeta({ irn })
+        .then((meta) => {
+          if (!meta.minYear || !meta.maxYear) {
+            return;
+          }
+          setFilters((prev) =>
+            prev.irn === irn ? { ...prev, startYear: meta.minYear!, endYear: meta.maxYear! } : prev,
+          );
+        })
+        .catch(() => undefined);
     },
     [setFilters],
   );
