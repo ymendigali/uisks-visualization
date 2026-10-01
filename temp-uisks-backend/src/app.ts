@@ -28,6 +28,7 @@ import { openApiSpec } from "./api/docs/openapi";
 import { DashboardService } from "./application/use-cases/dashboard/DashboardService";
 import { PostgresProjectRepository } from "./infrastructure/repositories/postgres/PostgresProjectRepository";
 import { PostgresEmployeeRepository } from "./infrastructure/repositories/postgres/PostgresEmployeeRepository";
+import { PostgresProjectResultRepository } from "./infrastructure/repositories/postgres/PostgresProjectResultRepository";
 
 export const buildApp = (): express.Express => {
   const app = express();
@@ -55,10 +56,11 @@ export const buildApp = (): express.Express => {
 
   const projectRepository = new PostgresProjectRepository(usersDbPool, env.USERS_PROJECTS_TABLE);
   const employeeRepository = new PostgresEmployeeRepository(usersDbPool, env.USERS_EMPLOYEES_TABLE);
+  const projectResultRepository = new PostgresProjectResultRepository(usersDbPool, env.USERS_PROJECT_RESULTS_TABLE);
 
   const projectService = new ProjectService(projectRepository);
   const employeeService = new EmployeeService(employeeRepository);
-  const publicationService = new PublicationService(publicationRepository, projectRepository);
+  const publicationService = new PublicationService(publicationRepository, projectResultRepository);
   const financeService = new FinanceService(financeRepository, projectRepository);
   const dashboardService = new DashboardService(projectRepository, employeeRepository);
 

@@ -17,7 +17,6 @@ export const buildPublicationRoutes = (
   const readAnalyticsFilters = (query: Record<string, unknown>) => {
     const yearFromRaw = query.yearFrom ? Number(query.yearFrom) : undefined;
     const yearToRaw = query.yearTo ? Number(query.yearTo) : undefined;
-    const trlRaw = query.trl ? Number(query.trl) : undefined;
 
     return {
       region: query.region?.toString(),
@@ -30,8 +29,7 @@ export const buildPublicationRoutes = (
       applicant: query.applicant?.toString(),
       customer: query.customer?.toString(),
       mrnti: query.mrnti?.toString(),
-      status: query.status?.toString(),
-      trl: Number.isFinite(trlRaw) ? trlRaw : undefined
+      status: query.status?.toString()
     };
   };
 
@@ -58,6 +56,14 @@ export const buildPublicationRoutes = (
         readAnalyticsFilters(req.query as Record<string, unknown>)
       );
       res.status(200).json(distributions);
+    })
+  );
+
+  router.get(
+    "/analytics-filters",
+    asyncHandler(async (_req, res) => {
+      const filters = await publicationService.getAnalyticsFilters();
+      res.status(200).json(filters);
     })
   );
 

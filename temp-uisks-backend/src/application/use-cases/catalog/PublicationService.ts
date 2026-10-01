@@ -1,7 +1,8 @@
 import { Publication } from "../../../domain/catalog/Publication";
+import { ProjectResult } from "../../../domain/catalog/ProjectResult";
 import {
-  ProjectListFilters,
-  ProjectRepository,
+  FilterOptionCountString,
+  ProjectResultRepository,
   PublicationFilterMeta,
   PublicationFilterOptions,
   PublicationListFilters,
@@ -21,7 +22,6 @@ export type PublicationAnalyticsFilters = {
   customer?: string;
   mrnti?: string;
   status?: string;
-  trl?: number;
 };
 
 export type PublicationsSummary = {
@@ -40,6 +40,10 @@ export type PublicationsTimeseriesItem = {
   total: number;
   domestic: number;
   foreign: number;
+  scopus: number;
+  wos: number;
+  patents: number;
+  implementations: number;
 };
 
 export type PublicationsDistributions = {
@@ -47,86 +51,88 @@ export type PublicationsDistributions = {
   priorities: Array<{ priority: string; value: number }>;
   topApplicants: Array<{ name: string; value: number }>;
   patentsVsImplementations: { patents: number; implementations: number };
-  wosQuartiles: Array<{ quartile: string; value: number }>;
 };
 
-const toStringValue = (value: unknown): string => String(value ?? "").trim();
-
-const toNumber = (value: unknown): number => {
-  const normalized = toStringValue(value)
-    .replace(/\s/g, "")
-    .replace(/[^\d,.-]/g, "")
-    .replace(/,(?=\d{1,2}$)/, ".")
-    .replace(/,/g, "");
-
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed : 0;
+export type PublicationsAnalyticsFilterOptions = {
+  irn: FilterOptionCountString[];
+  financingType: FilterOptionCountString[];
+  priority: FilterOptionCountString[];
+  contest: FilterOptionCountString[];
+  applicant: FilterOptionCountString[];
+  customer: FilterOptionCountString[];
+  mrnti: FilterOptionCountString[];
+  status: FilterOptionCountString[];
+  region: FilterOptionCountString[];
+  yearRange: { min: number | null; max: number | null };
 };
 
-const getExcelNumber = (excelData: Record<string, unknown> | undefined, keys: string[]): number => {
-  if (!excelData) {
-    return 0;
+const normalize = (value: string | undefined): string =>
+  String(value ?? "").toLowerCase().replace(/ё/g, "е").replace(/\s+/g, " ").trim();
+
+const isNoFilterValue = (value?: string): boolean =>
+  ["", "all", "any", "все", "все регионы", "national"].includes(normalize(value));
+
+const normalizeRegion = (value: string): string =>
+  normalize(value)
+    .replace(/[.,]/g, " ")
+    .replace(/(^|\s)(город|г|область|обл)(?=\s|$)/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+// Filter values are exact option values from /analytics-filters, except MRNTI,
+// which also accepts a code prefix (e.g. "31" or "31.25").
+const matchesFilters = (item: ProjectResult, filters: PublicationAnalyticsFilters): boolean => {
+  const exact = (actual: string, expected?: string) => isNoFilterValue(expected) || normalize(actual) === normalize(expected);
+
+  if (!isNoFilterValue(filters.region) && normalizeRegion(item.region) !== normalizeRegion(filters.region ?? "")) {
+    return false;
   }
-
-  for (const key of keys) {
-    const exact = excelData[key];
-    if (exact !== undefined && exact !== null && toStringValue(exact) !== "") {
-      return toNumber(exact);
+  if (
+    !exact(item.irn, filters.irn) ||
+    !exact(item.financingType, filters.financingType) ||
+    !exact(item.priority, filters.priority) ||
+    !exact(item.contest, filters.contest) ||
+    !exact(item.applicant, filters.applicant) ||
+    !exact(item.customer, filters.customer) ||
+    !exact(item.status, filters.status)
+  ) {
+    return false;
+  }
+  if (!isNoFilterValue(filters.mrnti) && !normalize(item.mrnti).startsWith(normalize(filters.mrnti))) {
+    return false;
+  }
+  if (filters.yearFrom !== undefined || filters.yearTo !== undefined) {
+    if (item.startYear === null || item.endYear === null) {
+      return false;
     }
-
-    const normalized = key.toLowerCase();
-    const fuzzy = Object.entries(excelData).find(([candidate, value]) => {
-      const text = toStringValue(value);
-      if (!text) {
-        return false;
-      }
-      const normalizedCandidate = candidate.toLowerCase();
-      return normalizedCandidate.includes(normalized) || normalized.includes(normalizedCandidate);
-    });
-
-    if (fuzzy) {
-      return toNumber(fuzzy[1]);
+    if (filters.yearFrom !== undefined && item.endYear < filters.yearFrom) {
+      return false;
+    }
+    if (filters.yearTo !== undefined && item.startYear > filters.yearTo) {
+      return false;
     }
   }
-
-  return 0;
+  return true;
 };
 
-const deriveYearRange = (project: {
-  startYear?: number | null;
-  endYear?: number | null;
-  startDate: string | null;
-  endDate: string | null;
-}): { startYear: number | null; endYear: number | null } => {
-  const startFromYear = project.startYear ?? null;
-  const endFromYear = project.endYear ?? null;
-
-  const fromDate = (value: string | null): number | null => {
-    const raw = toStringValue(value);
-    const match = raw.match(/(19|20)\d{2}/);
-    if (!match) {
-      return null;
+const countValues = (values: string[]): FilterOptionCountString[] => {
+  const counter = new Map<string, number>();
+  for (const value of values) {
+    if (value) {
+      counter.set(value, (counter.get(value) ?? 0) + 1);
     }
-    const year = Number(match[0]);
-    return Number.isFinite(year) ? year : null;
-  };
-
-  const start = startFromYear ?? fromDate(project.startDate);
-  const end = endFromYear ?? fromDate(project.endDate) ?? start;
-  if (!start || !end) {
-    return { startYear: null, endYear: null };
   }
-
-  return {
-    startYear: Math.min(start, end),
-    endYear: Math.max(start, end)
-  };
+  return Array.from(counter.entries())
+    .sort((a, b) => a[0].localeCompare(b[0], "ru"))
+    .map(([value, count]) => ({ value, count }));
 };
+
+const round2 = (value: number): number => Number(value.toFixed(2));
 
 export class PublicationService {
   constructor(
     private readonly publicationRepository: PublicationRepository,
-    private readonly projectRepository?: ProjectRepository
+    private readonly projectResultRepository?: ProjectResultRepository
   ) {}
 
   list(filters: PublicationListFilters): Promise<PaginatedResult<Publication>> {
@@ -158,85 +164,76 @@ export class PublicationService {
   }
 
   async getSummary(filters: PublicationAnalyticsFilters): Promise<PublicationsSummary> {
-    const projects = await this.getAnalyticsProjects(filters);
+    const items = await this.getAnalyticsItems(filters);
+    const sum = (pick: (item: ProjectResult) => number) => items.reduce((total, item) => total + pick(item), 0);
 
-    let domestic = 0;
-    let foreign = 0;
-    let scopus = 0;
-    let wos = 0;
-    let patents = 0;
-    let implementations = 0;
-
-    for (const project of projects) {
-      const excelData = project.excelData;
-      domestic += getExcelNumber(excelData, ["Отечественные публикации"]);
-      foreign += getExcelNumber(excelData, ["Зарубежные публикации"]);
-      scopus += getExcelNumber(excelData, ["Публикаций Scopus"]);
-      wos += getExcelNumber(excelData, ["Публикаций Web of science", "Публикаций Web of Science"]);
-      patents += getExcelNumber(excelData, ["Количество Патентов"]);
-      implementations += getExcelNumber(excelData, ["Количество внедрений"]);
-    }
-
-    const total = domestic + foreign;
+    const domestic = sum((item) => item.domesticPublications);
+    const foreign = sum((item) => item.foreignPublications);
 
     return {
-      total,
+      total: domestic + foreign,
       domestic,
       foreign,
-      scopus,
-      wos,
-      patents,
-      implementations,
-      projects: projects.length
+      scopus: sum((item) => item.scopusPublications),
+      wos: sum((item) => item.wosPublications),
+      patents: sum((item) => item.patents),
+      implementations: sum((item) => item.implementations),
+      projects: items.length
     };
   }
 
+  // Results are reported per project for its whole period, so each project's
+  // figures are spread evenly across the years of that period.
   async getTimeseries(filters: PublicationAnalyticsFilters): Promise<{ items: PublicationsTimeseriesItem[] }> {
-    const projects = await this.getAnalyticsProjects(filters);
+    const items = await this.getAnalyticsItems(filters);
+    const metrics = ["domestic", "foreign", "scopus", "wos", "patents", "implementations"] as const;
+    type Metric = (typeof metrics)[number];
+    const years = new Map<number, Record<Metric, number>>();
 
-    const years = new Map<number, { domestic: number; foreign: number }>();
-
-    for (const project of projects) {
-      const excelData = project.excelData;
-      const domestic = getExcelNumber(excelData, ["Отечественные публикации"]);
-      const foreign = getExcelNumber(excelData, ["Зарубежные публикации"]);
-      const total = domestic + foreign;
-      if (total <= 0) {
+    for (const item of items) {
+      if (item.startYear === null || item.endYear === null) {
         continue;
       }
+      const span = Math.max(item.endYear - item.startYear + 1, 1);
+      const values: Record<Metric, number> = {
+        domestic: item.domesticPublications,
+        foreign: item.foreignPublications,
+        scopus: item.scopusPublications,
+        wos: item.wosPublications,
+        patents: item.patents,
+        implementations: item.implementations
+      };
 
-      const range = deriveYearRange(project);
-      if (!range.startYear || !range.endYear) {
-        continue;
-      }
-
-      const span = Math.max(range.endYear - range.startYear + 1, 1);
-      const domesticPart = domestic / span;
-      const foreignPart = foreign / span;
-
-      for (let year = range.startYear; year <= range.endYear; year += 1) {
-        const previous = years.get(year) ?? { domestic: 0, foreign: 0 };
-        years.set(year, {
-          domestic: previous.domestic + domesticPart,
-          foreign: previous.foreign + foreignPart
-        });
+      for (let year = item.startYear; year <= item.endYear; year += 1) {
+        if ((filters.yearFrom !== undefined && year < filters.yearFrom) || (filters.yearTo !== undefined && year > filters.yearTo)) {
+          continue;
+        }
+        const current = years.get(year) ?? { domestic: 0, foreign: 0, scopus: 0, wos: 0, patents: 0, implementations: 0 };
+        for (const metric of metrics) {
+          current[metric] += values[metric] / span;
+        }
+        years.set(year, current);
       }
     }
 
-    const items = Array.from(years.entries())
-      .sort((a, b) => a[0] - b[0])
-      .map(([year, value]) => ({
-        year,
-        domestic: Number(value.domestic.toFixed(2)),
-        foreign: Number(value.foreign.toFixed(2)),
-        total: Number((value.domestic + value.foreign).toFixed(2))
-      }));
-
-    return { items };
+    return {
+      items: Array.from(years.entries())
+        .sort((a, b) => a[0] - b[0])
+        .map(([year, value]) => ({
+          year,
+          total: round2(value.domestic + value.foreign),
+          domestic: round2(value.domestic),
+          foreign: round2(value.foreign),
+          scopus: round2(value.scopus),
+          wos: round2(value.wos),
+          patents: round2(value.patents),
+          implementations: round2(value.implementations)
+        }))
+    };
   }
 
   async getDistributions(filters: PublicationAnalyticsFilters): Promise<PublicationsDistributions> {
-    const projects = await this.getAnalyticsProjects(filters);
+    const items = await this.getAnalyticsItems(filters);
     const priorities = new Map<string, number>();
     const applicants = new Map<string, number>();
 
@@ -245,86 +242,59 @@ export class PublicationService {
     let patents = 0;
     let implementations = 0;
 
-    for (const project of projects) {
-      const excelData = project.excelData;
-      const domestic = getExcelNumber(excelData, ["Отечественные публикации"]);
-      const foreign = getExcelNumber(excelData, ["Зарубежные публикации"]);
-      const publicationTotal = domestic + foreign;
-
-      const applicant = toStringValue(project.lead);
-      if (applicant && publicationTotal > 0) {
-        applicants.set(applicant, (applicants.get(applicant) ?? 0) + publicationTotal);
+    for (const item of items) {
+      const publications = item.domesticPublications + item.foreignPublications;
+      if (item.priority && publications > 0) {
+        priorities.set(item.priority, (priorities.get(item.priority) ?? 0) + publications);
       }
-
-      const priority = toStringValue(project.priority);
-      if (priority) {
-        priorities.set(priority, (priorities.get(priority) ?? 0) + 1);
+      if (item.applicant && publications > 0) {
+        applicants.set(item.applicant, (applicants.get(item.applicant) ?? 0) + publications);
       }
-
-      scopus += getExcelNumber(excelData, ["Публикаций Scopus"]);
-      wos += getExcelNumber(excelData, ["Публикаций Web of science", "Публикаций Web of Science"]);
-      patents += getExcelNumber(excelData, ["Количество Патентов"]);
-      implementations += getExcelNumber(excelData, ["Количество внедрений"]);
+      scopus += item.scopusPublications;
+      wos += item.wosPublications;
+      patents += item.patents;
+      implementations += item.implementations;
     }
 
-    const prioritiesList = Array.from(priorities.entries())
-      .map(([priority, value]) => ({ priority, value }))
-      .sort((a, b) => b.value - a.value);
-
-    const topApplicants = Array.from(applicants.entries())
-      .map(([name, value]) => ({ name, value: Number(value.toFixed(2)) }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 5);
-
-    const quartileSeed = Math.max(Math.round(wos), 0);
-    const wosQuartiles = [
-      { quartile: "Q1", value: Math.round(quartileSeed * 0.35) },
-      { quartile: "Q2", value: Math.round(quartileSeed * 0.3) },
-      { quartile: "Q3", value: Math.round(quartileSeed * 0.2) },
-      { quartile: "Q4", value: Math.max(quartileSeed - Math.round(quartileSeed * 0.85), 0) }
-    ];
+    const toSorted = (map: Map<string, number>) => Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
 
     return {
       scopusWos: { scopus, wos },
-      priorities: prioritiesList,
-      topApplicants,
-      patentsVsImplementations: { patents, implementations },
-      wosQuartiles
+      priorities: toSorted(priorities).map(([priority, value]) => ({ priority, value })),
+      topApplicants: toSorted(applicants)
+        .slice(0, 5)
+        .map(([name, value]) => ({ name, value })),
+      patentsVsImplementations: { patents, implementations }
     };
   }
 
-  private async getAnalyticsProjects(filters: PublicationAnalyticsFilters) {
-    if (!this.projectRepository) {
+  async getAnalyticsFilters(): Promise<PublicationsAnalyticsFilterOptions> {
+    const items = this.projectResultRepository ? await this.projectResultRepository.listAll() : [];
+    const startYears = items.map((item) => item.startYear).filter((year): year is number => year !== null);
+    const endYears = items.map((item) => item.endYear).filter((year): year is number => year !== null);
+
+    return {
+      irn: countValues(items.map((item) => item.irn)),
+      financingType: countValues(items.map((item) => item.financingType)),
+      priority: countValues(items.map((item) => item.priority)),
+      contest: countValues(items.map((item) => item.contest)),
+      applicant: countValues(items.map((item) => item.applicant)),
+      customer: countValues(items.map((item) => item.customer)),
+      mrnti: countValues(items.map((item) => item.mrnti.split(".")[0] ?? "")),
+      status: countValues(items.map((item) => item.status)),
+      region: countValues(items.map((item) => item.region)),
+      yearRange: {
+        min: startYears.length ? Math.min(...startYears) : null,
+        max: endYears.length ? Math.max(...endYears) : null
+      }
+    };
+  }
+
+  private async getAnalyticsItems(filters: PublicationAnalyticsFilters): Promise<ProjectResult[]> {
+    if (!this.projectResultRepository) {
       return [];
     }
-
-    const query: ProjectListFilters = {
-      region: filters.region,
-      irn: filters.irn,
-      financingType: filters.financingType,
-      priority: filters.priority,
-      contest: filters.contest,
-      applicant: filters.applicant,
-      customer: filters.customer,
-      mrnti: filters.mrnti,
-      status: filters.status,
-      trl: filters.trl,
-      startYear: filters.yearFrom,
-      endYear: filters.yearTo
-    };
-
-    const items = [];
-    let page = 1;
-
-    while (true) {
-      const result = await this.projectRepository.list({ ...query, page, limit: 10000 });
-      items.push(...result.items);
-      if (!result.meta.hasNextPage) {
-        break;
-      }
-      page += 1;
-    }
-
-    return items;
+    const items = await this.projectResultRepository.listAll();
+    return items.filter((item) => matchesFilters(item, filters));
   }
 }

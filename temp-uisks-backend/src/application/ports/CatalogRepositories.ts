@@ -2,6 +2,7 @@ import { Employee } from "../../domain/catalog/Employee";
 import { FinanceHistoryItem, FinanceProject, FinanceSummary } from "../../domain/catalog/Finance";
 import { Project } from "../../domain/catalog/Project";
 import { Publication } from "../../domain/catalog/Publication";
+import { ProjectResult } from "../../domain/catalog/ProjectResult";
 import { PaginatedResult, PaginationInput } from "./Pagination";
 
 export type ProjectListFilters = {
@@ -162,4 +163,8 @@ export interface FinanceRepository {
   getSummary(year?: number): Promise<FinanceSummary>;
   getProject(projectId: string): Promise<FinanceProject | null>;
   upsertHistory(projectId: string, item: FinanceHistoryItem): Promise<FinanceProject>;
+}
+
+export interface ProjectResultRepository {
+  listAll(): Promise<ProjectResult[]>;
 }

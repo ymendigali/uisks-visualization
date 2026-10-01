@@ -10,7 +10,7 @@ const { Client } = pg;
 
 const usage = () => {
   console.log(
-    "Usage: node scripts/import-employees-xlsx.mjs <fileOrDir> [more files...] [--sheet <sheetName>] [--truncate]"
+    "Usage: node scripts/import-employees-xlsx.mjs <fileOrDir> [more files...] [--sheet <sheetName>] [--truncate | --merge]"
   );
 };
 
@@ -23,6 +23,7 @@ if (args.length === 0) {
 const inputPaths = [];
 let sheetName;
 let truncate = false;
+let merge = false;
 
 for (let index = 0; index < args.length; index += 1) {
   const arg = args[index];
@@ -39,9 +40,18 @@ for (let index = 0; index < args.length; index += 1) {
     truncate = true;
     continue;
   }
+  if (arg === "--merge") {
+    merge = true;
+    continue;
+  }
 
   console.error(`Unknown option: ${arg}`);
   usage();
+  process.exit(1);
+}
+
+if (truncate && merge) {
+  console.error("--truncate and --merge cannot be used together");
   process.exit(1);
 }
 
@@ -61,6 +71,7 @@ const env = {
 };
 
 const normalize = (value) => String(value ?? "").toLowerCase().trim();
+const normalizeName = (value) => String(value ?? "").toLowerCase().replace(/\s+/g, " ").trim();
 const toStringValue = (value) => String(value ?? "").replace(/\s+/g, " ").trim();
 
 const isExcelFile = (fileName) => /\.(xlsx|xlsm|xls)$/i.test(fileName);
@@ -177,7 +188,24 @@ const parseWorkbookRows = (workbook, sourceFile) => {
     process.exit(1);
   }
 
-  const rows = xlsx.utils.sheet_to_json(workbook.Sheets[targetSheetName], { defval: "", raw: true });
+  const sheet = workbook.Sheets[targetSheetName];
+  // Some exports declare a range up to column XFD with placeholder headers ("Столбец139"...)
+  // and no data below them; shrink the range to cells that actually hold data.
+  let lastRow = 0;
+  let lastCol = 0;
+  for (const address of Object.keys(sheet)) {
+    if (address.startsWith("!")) continue;
+    const value = sheet[address]?.v;
+    if (value === undefined || value === null || value === "") continue;
+    const cell = xlsx.utils.decode_cell(address);
+    if (cell.r > 0) {
+      lastRow = Math.max(lastRow, cell.r);
+      lastCol = Math.max(lastCol, cell.c);
+    }
+  }
+  sheet["!ref"] = xlsx.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: lastRow, c: lastCol } });
+
+  const rows = xlsx.utils.sheet_to_json(sheet, { defval: "", raw: true });
   const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
 
   return rows
@@ -188,23 +216,28 @@ const parseWorkbookRows = (workbook, sourceFile) => {
       }
 
       const citizenship = toStringValue(findField(row, ["Гражданство"]));
-      const academicDegree = toStringValue(findField(row, ["Ученая степень"]));
+      const rawDegree = toStringValue(findField(row, ["Ученая степень", "Степень"]));
+      const academicDegree = normalize(rawDegree) === "нет" ? "" : rawDegree;
       const position = toStringValue(findField(row, ["Ученое звание"]));
       const scopusAuthorId = toStringValue(findField(row, ["Author ID SCOPUS"]));
       const researcherIdWos = toStringValue(findField(row, ["Researcher ID web of science"]));
       const orcid = toStringValue(findField(row, ["ORCID ID"]));
-      const hIndex = toNumber(findField(row, ["H-index"]));
-      const region = toStringValue(findField(row, ["Регион"])) || "Не указан";
+      const hIndexRaw = findField(row, ["H-index"]);
+      const hIndex = hIndexRaw === "" ? null : toNumber(hIndexRaw);
+      const region = toStringValue(findField(row, ["Регион"]));
       const gender = toStringValue(findField(row, ["Gender"])) || toStringValue(findField(row, ["Пол"]));
       const department = toStringValue(findField(row, ["Место работы"]));
       const classifier = toStringValue(findField(row, ["Классификатор научных направлений"]));
       const mrnti = toStringValue(findField(row, ["МРНТИ"]));
-      const leadCodes = parseCodes(findField(row, ["Отчет н.р."]));
-      const memberCodes = parseCodes(findField(row, ["Отчет ч.и.г."]));
+      const leadCodes = parseCodes(findField(row, ["Отчет н.р.", "НР в проекте"]));
+      const memberCodes = parseCodes(findField(row, ["Отчет ч.и.г.", "ЧИГ в проекте"]));
       const projectIds = Array.from(new Set([...leadCodes, ...memberCodes]));
-      const projectRole = leadCodes.length > 0 ? "руководитель" : memberCodes.length > 0 ? "исполнитель" : "";
+      const roleText = normalize(findField(row, ["Роль в проекте"]));
+      const isLead = leadCodes.length > 0 || /(^|[\s,])нр($|[\s,])/.test(roleText);
+      const isMember = memberCodes.length > 0 || roleText.includes("чиг");
+      const projectRole = isLead ? "руководитель" : isMember ? "исполнитель" : "";
 
-      const idSource = scopusAuthorId || `${name}|${department}|${region}`;
+      const idSource = scopusAuthorId || `${name}|${department}|${region || "Не указан"}`;
       const generatedId = crypto.createHash("sha1").update(idSource).digest("hex").slice(0, 16);
 
       return {
@@ -242,6 +275,38 @@ if (allRows.length === 0) {
   process.exit(0);
 }
 
+const client = new Client({
+  host: env.host,
+  port: env.port,
+  database: env.database,
+  user: env.user,
+  password: env.password
+});
+
+await client.connect();
+
+// In merge mode, rows are matched to existing employees by normalized full name,
+// so updated Excel exports (which may lack Scopus ID/region) update the same record.
+let matchedExisting = 0;
+if (merge) {
+  const tableExists = await client.query("SELECT to_regclass($1) AS name", [env.table]);
+  if (tableExists.rows[0]?.name) {
+    const existing = await client.query(`SELECT id, name FROM ${tableName} ORDER BY id`);
+    const idByName = new Map();
+    for (const { id, name } of existing.rows) {
+      const key = normalizeName(name);
+      if (!idByName.has(key)) idByName.set(key, id);
+    }
+    for (const row of allRows) {
+      const existingId = idByName.get(normalizeName(row.name));
+      if (existingId) {
+        row.id = existingId;
+        matchedExisting += 1;
+      }
+    }
+  }
+}
+
 const deduplicated = new Map();
 let mergedCount = 0;
 for (const row of allRows) {
@@ -259,16 +324,6 @@ for (const row of allRows) {
 }
 
 const validRows = Array.from(deduplicated.values());
-
-const client = new Client({
-  host: env.host,
-  port: env.port,
-  database: env.database,
-  user: env.user,
-  password: env.password
-});
-
-await client.connect();
 
 try {
   await client.query("BEGIN");
@@ -307,13 +362,13 @@ try {
     await client.query(`TRUNCATE TABLE ${tableName}`);
   }
 
-  const upsertSql = `
+  const replaceSql = `
     INSERT INTO ${tableName} (
       id, name, position, department, region, h_index, academic_degree, scopus_author_id,
       researcher_id_wos, orcid, gender, citizenship, project_role, mrnti, classifier,
       project_ids, excel_data, source_ref, updated_at
     ) VALUES (
-      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17::jsonb, $18, NOW()
+      $1, $2, $3, $4, COALESCE($5, 'Не указан'), COALESCE($6, 0), $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17::jsonb, $18, NOW()
     )
     ON CONFLICT (id) DO UPDATE
     SET
@@ -337,13 +392,38 @@ try {
       updated_at = NOW()
   `;
 
+  // Fields missing from the file (NULL) keep their current values; a more detailed
+  // existing academic degree is preferred over the generic one from newer exports.
+  const t = tableName;
+  const mergeSql = replaceSql.replace(/ON CONFLICT \(id\) DO UPDATE[\s\S]*$/, `ON CONFLICT (id) DO UPDATE
+    SET
+      position = COALESCE(EXCLUDED.position, ${t}.position),
+      department = COALESCE(EXCLUDED.department, ${t}.department),
+      region = COALESCE($5, ${t}.region),
+      h_index = COALESCE($6, ${t}.h_index),
+      academic_degree = COALESCE(${t}.academic_degree, EXCLUDED.academic_degree),
+      scopus_author_id = COALESCE(EXCLUDED.scopus_author_id, ${t}.scopus_author_id),
+      researcher_id_wos = COALESCE(EXCLUDED.researcher_id_wos, ${t}.researcher_id_wos),
+      orcid = COALESCE(EXCLUDED.orcid, ${t}.orcid),
+      gender = COALESCE(EXCLUDED.gender, ${t}.gender),
+      citizenship = COALESCE(EXCLUDED.citizenship, ${t}.citizenship),
+      project_role = COALESCE(EXCLUDED.project_role, ${t}.project_role),
+      mrnti = COALESCE(EXCLUDED.mrnti, ${t}.mrnti),
+      classifier = COALESCE(EXCLUDED.classifier, ${t}.classifier),
+      project_ids = COALESCE(EXCLUDED.project_ids, ${t}.project_ids),
+      excel_data = ${t}.excel_data || EXCLUDED.excel_data,
+      source_ref = EXCLUDED.source_ref,
+      updated_at = NOW()
+  `);
+  const upsertSql = merge ? mergeSql : replaceSql;
+
   for (const row of validRows) {
     await client.query(upsertSql, [
       row.id,
       row.name,
       row.position || null,
       row.department || null,
-      row.region,
+      row.region || null,
       row.hIndex,
       row.academicDegree || null,
       row.scopusAuthorId || null,
@@ -364,6 +444,9 @@ try {
   console.log(
     `Imported ${validRows.length} unique rows (merged ${mergedCount} duplicates) from ${sourceFiles.length} file(s) into ${env.database}.${env.table}`
   );
+  if (merge) {
+    console.log(`Merge mode: ${matchedExisting} rows matched existing employees by name`);
+  }
 } catch (error) {
   await client.query("ROLLBACK");
   console.error("Import failed:", error.message || error);

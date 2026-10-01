@@ -19,6 +19,7 @@ const envSchema = z.object({
   USERS_DB_PASSWORD: z.string().default("users_password"),
   USERS_PROJECTS_TABLE: z.string().default("projects"),
   USERS_EMPLOYEES_TABLE: z.string().default("employees"),
+  USERS_PROJECT_RESULTS_TABLE: z.string().default("project_results"),
   JWT_SECRET: z.string(),
   JWT_EXPIRES_IN: z.string().default("1d"),
   SQL_EXAMPLE_BASE: z.string().default("sql_example")

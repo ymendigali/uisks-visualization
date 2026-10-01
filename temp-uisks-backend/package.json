@@ -9,7 +9,8 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
     "import:projects:xlsx": "node scripts/import-projects-xlsx.mjs",
-    "import:employees:xlsx": "node scripts/import-employees-xlsx.mjs"
+    "import:employees:xlsx": "node scripts/import-employees-xlsx.mjs",
+    "import:results:xlsx": "node scripts/import-project-results-xlsx.mjs"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
