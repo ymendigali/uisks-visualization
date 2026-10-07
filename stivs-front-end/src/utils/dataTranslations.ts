@@ -30,6 +30,9 @@ export const DEGREE_TRANSLATIONS: Record<string, Translation> = {
   'Магистр': { kk: 'Магистр', en: "master's degree" },
   'Аспирант': { kk: 'Аспирант', en: 'Postgraduate' },
   'Нет': { kk: 'Жоқ', en: 'None' },
+  'Не указано': { kk: 'Көрсетілмеген', en: 'Not specified' },
+  'Докторант': { kk: 'Докторант', en: 'Doctoral student' },
+  'Специалист': { kk: 'Маман', en: 'Specialist' },
 };
 
 // DB values for academic degree are free-form ("Кандидат химических наук", "Доктор биологических

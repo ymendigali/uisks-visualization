@@ -4,7 +4,7 @@ import { useLocalRegionSelection } from '../hooks/useLocalRegionSelection';
 import type { RegionId } from '../context/RegionContext';
 import KazakhstanMap from '../components/Home/KazakhstanMap';
 import { calculateNationalMetrics, formatNumber } from '../utils/metrics';
-import { DollarSign, TrendingUp } from 'lucide-react';
+import { DollarSign, RotateCcw, TrendingUp } from 'lucide-react';
 import {
   Chart as ChartJS,
   ArcElement,
@@ -25,6 +25,7 @@ import { translatePriority } from '../utils/dataTranslations';
 import type { FinanceFilterMeta, FinanceFilterOptions, FinanceSummary } from '../api/types';
 import PageLoader from '../components/PageLoader/PageLoader';
 import SearchableSelect from '../components/SearchableSelect/SearchableSelect';
+import YearRangeFilter from '../components/YearRangeFilter/YearRangeFilter';
 
 ChartJS.register(
   CategoryScale,
@@ -172,6 +173,21 @@ const applyRealFinances = (
   };
 };
 
+// Filters on page load; "Сбросить фильтры" returns to these (period clamped to the data range).
+const DEFAULT_FILTERS: FilterState = {
+  irn: 'all',
+  startYear: 2026,
+  endYear: 2034,
+  financingType: 'all',
+  cofinancing: 'all',
+  expense: 'salary',
+  priority: 'all',
+  competition: 'all',
+  applicant: 'all',
+  customer: 'all',
+  status: 'all',
+};
+
 const FinancesPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { selectedRegion, selectedRegionId, setSelectedRegionId, regions, isNational } =
@@ -186,19 +202,7 @@ const FinancesPage: React.FC = () => {
   const [apiFilterOptions, setApiFilterOptions] = useState<FinanceFilterOptions | null>(null);
   const [apiFilterMeta, setApiFilterMeta] = useState<FinanceFilterMeta | null>(null);
   
-  const [filters, setFilters] = useState<FilterState>({
-    irn: 'all',
-    startYear: 2026,
-    endYear: 2034,
-    financingType: 'all',
-    cofinancing: 'all',
-    expense: 'salary',
-    priority: 'all',
-    competition: 'all',
-    applicant: 'all',
-    customer: 'all',
-    status: 'all',
-  });
+  const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
 
   const resolveOptionLabel = useCallback(
     (value: string, options: Array<{ value: string; label: string }>) =>
@@ -239,8 +243,17 @@ const FinancesPage: React.FC = () => {
     (values: string[] | undefined, fallbackOptions: Array<{ value: string; label: string }>) => {
       const fallbackAll = fallbackOptions.find((option) => option.value === 'all');
       const fallbackRest = fallbackOptions.filter((option) => option.value !== 'all');
+      // Backend values can be longer spellings of a predefined option ("Коммерциализация РННТД"
+      // vs "Коммерциализация"); the backend matches filters by substring, so treat them as one.
+      const isCovered = (value: string) => {
+        const normalizedValue = value.trim().toLowerCase();
+        return fallbackRest.some((option) => {
+          const normalizedOption = option.value.trim().toLowerCase();
+          return normalizedValue.includes(normalizedOption) || normalizedOption.includes(normalizedValue);
+        });
+      };
       const extra = (values ?? [])
-        .filter((value) => !fallbackRest.some((option) => option.value === value))
+        .filter((value) => !isCovered(value))
         .map((value) => ({ value, label: value }));
 
       const merged = [...fallbackRest, ...extra];
@@ -952,32 +965,14 @@ const FinancesPage: React.FC = () => {
     [handleChartFilterRemove],
   );
 
-  const handleYearRangeChange = useCallback(
-    (key: 'startYear' | 'endYear', value: number) => {
-      setFilters((prev) => {
-        const next = { ...prev, [key]: clampValue(value, periodRange.min, periodRange.max) };
-        if (next.startYear > next.endYear) {
-          if (key === 'startYear') {
-            next.endYear = next.startYear;
-          } else {
-            next.startYear = next.endYear;
-          }
-        }
-        return next;
-      });
-    },
-    [periodRange.max, periodRange.min],
-  );
-
-  const periodRangeStyle = useMemo(() => {
-    const total = Math.max(periodRange.max - periodRange.min, 1);
-    const startProgress = ((filters.startYear - periodRange.min) / total) * 100;
-    const endProgress = ((filters.endYear - periodRange.min) / total) * 100;
-    return {
-      '--range-start': `${startProgress}%`,
-      '--range-end': `${endProgress}%`,
-    } as CSSProperties;
-  }, [filters.endYear, filters.startYear, periodRange.max, periodRange.min]);
+  const handleResetFilters = useCallback(() => {
+    setFilters({
+      ...DEFAULT_FILTERS,
+      startYear: clampValue(DEFAULT_FILTERS.startYear, periodRange.min, periodRange.max),
+      endYear: clampValue(DEFAULT_FILTERS.endYear, periodRange.min, periodRange.max),
+    });
+    setSelectedRegionId('national');
+  }, [periodRange.max, periodRange.min, setSelectedRegionId]);
 
   const handleMapSelect = useCallback(
     (regionId: string) => {
@@ -1024,34 +1019,15 @@ const FinancesPage: React.FC = () => {
             <label htmlFor="filter-period">{t('filter_year_range')}</label>
             <span className="finances-filter-value">{filters.startYear} — {filters.endYear}</span>
           </div>
-          <div className="period-range-slider" style={periodRangeStyle}>
-            <div className="period-range-values">
-              <span className="period-range-value">{filters.startYear}</span>
-              <span className="period-range-value">{filters.endYear}</span>
-            </div>
-            <div className="period-range-track" />
-            <div className="period-range-inputs">
-              <input
-                id="filter-period"
-                type="range"
-                min={periodRange.min}
-                max={periodRange.max}
-                step={1}
-                value={filters.startYear}
-                onChange={(event) => handleYearRangeChange('startYear', Number(event.target.value))}
-                className="period-range-thumb"
-              />
-              <input
-                type="range"
-                min={periodRange.min}
-                max={periodRange.max}
-                step={1}
-                value={filters.endYear}
-                onChange={(event) => handleYearRangeChange('endYear', Number(event.target.value))}
-                className="period-range-thumb period-range-thumb--upper"
-              />
-            </div>
-          </div>
+          <YearRangeFilter
+            idPrefix="finances-period"
+            min={periodRange.min}
+            max={periodRange.max}
+            startYear={filters.startYear}
+            endYear={filters.endYear}
+            counts={apiFilterMeta?.yearCounts}
+            onApply={(startYear, endYear) => setFilters((prev) => ({ ...prev, startYear, endYear }))}
+          />
         </div>
 
         <div className="finances-filter-group">
@@ -1136,6 +1112,13 @@ const FinancesPage: React.FC = () => {
               </option>
             ))}
           </select>
+        </div>
+
+        <div className="finances-filter-actions">
+          <button type="button" className="finances-reset-button" onClick={handleResetFilters}>
+            <RotateCcw size={16} />
+            {t('projects_button_reset_filters')}
+          </button>
         </div>
       </section>
 

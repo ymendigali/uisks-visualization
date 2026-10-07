@@ -1,0 +1,121 @@
+.year-range-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  width: 100%;
+}
+
+.year-range-modes {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.85rem;
+  color: #334155;
+  font-weight: 500;
+}
+
+/* Doubled class: page styles like ".finances-filter-group label" must not uppercase it. */
+.year-range-filter .year-range-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #334155;
+}
+
+.year-range-mode input {
+  accent-color: #2563eb;
+  margin: 0;
+}
+
+.year-range-histogram {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 56px;
+  padding: 0 7px;
+  border-bottom: 2px solid #cbd5e1;
+}
+
+.year-range-bar {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  border-radius: 3px 3px 0 0;
+  background: #cbd5e1;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.year-range-bar--active {
+  background: #2563eb;
+}
+
+.year-range-bar:hover {
+  background: #1d4ed8;
+}
+
+.year-range-slider {
+  margin-top: -0.35rem;
+}
+
+.year-range-inputs {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.year-range-inputs input {
+  width: 0;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 2.4rem;
+  padding: 0 0.6rem;
+  border: 1px solid rgba(148, 163, 184, 0.5);
+  border-radius: 8px;
+  background: #ffffff;
+  color: #0f172a;
+  font-weight: 600;
+  font-size: 0.95rem;
+  text-align: center;
+  -moz-appearance: textfield;
+}
+
+.year-range-inputs input::-webkit-outer-spin-button,
+.year-range-inputs input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.year-range-inputs input:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+.year-range-dash {
+  color: #64748b;
+  font-weight: 600;
+}
+
+.year-range-apply {
+  flex: 0 0 auto;
+  width: 2.6rem;
+  height: 2.4rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 8px;
+  background: #2563eb;
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.year-range-apply:hover {
+  background: #1d4ed8;
+}

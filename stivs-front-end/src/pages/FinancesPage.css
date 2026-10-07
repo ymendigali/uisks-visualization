@@ -985,3 +985,29 @@
 .finances-filter-group .searchable-select-input:focus::placeholder {
   color: #94a3b8;
 }
+
+.finances-filter-actions {
+  flex: 1 1 100%;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.finances-reset-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.6rem 1.1rem;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  background: #ffffff;
+  color: #1e3a8a;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.finances-reset-button:hover {
+  border-color: #2563eb;
+  background: #eff6ff;
+}

@@ -109,6 +109,7 @@ export interface FinanceFilterMeta {
   status: FilterOptionCountString[];
   minYear?: number;
   maxYear?: number;
+  yearCounts?: Array<{ value: number; count: number }>;
 }
 
 export interface PaginationMeta {
@@ -180,6 +181,7 @@ export interface ProjectFilterMeta {
   applicant: FilterOptionCountString[];
   mrnti: FilterOptionCountString[];
   trl: FilterOptionCountString[];
+  yearCounts?: FilterOptionCountNumber[];
 }
 
 export interface EmployeeFilterMeta {

@@ -44,6 +44,7 @@ export const useProjectsData = <TProject>({
     applicant: Array<{ value: string; count: number }>;
     mrnti: Array<{ value: string; count: number }>;
     financingType: Array<{ value: string; count: number }>;
+    yearCounts: Array<{ value: number; count: number }>;
   } | null>(null);
   useEffect(() => {
     const controller = new AbortController();
@@ -100,6 +101,7 @@ export const useProjectsData = <TProject>({
           applicant: payload.applicant,
           mrnti: payload.mrnti,
           financingType: payload.financingType,
+          yearCounts: payload.yearCounts ?? [],
         });
       } catch {
         setProjectFiltersMeta(null);

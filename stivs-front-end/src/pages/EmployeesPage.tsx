@@ -10,6 +10,7 @@ import type { BackendEmployee } from '../api/types';
 import { H_INDEX_RANGE_BY_GROUP, useEmployeesData } from '../hooks/useEmployeesData';
 import SearchableSelect from '../components/SearchableSelect/SearchableSelect';
 import PageLoader from '../components/PageLoader/PageLoader';
+import Pagination from '../components/Pagination/Pagination';
 import DualScroll from '../components/DualScroll/DualScroll';
 import { exportPdfReport } from '../utils/exportPdfReport';
 import { translateDegree, translateGender } from '../utils/dataTranslations';
@@ -102,7 +103,7 @@ const employeeColumnDefinitions: EmployeeColumnDefinition[] = [
   { key: 'position', label: 'Ученое звание', sortKey: 'position' },
   { key: 'degree', label: 'Ученая степень', sortKey: 'degree' },
   { key: 'scopusAuthorId', label: 'AUTHOR ID В SCOPUS' },
-  { key: 'hIndexScopus', label: 'H-индекс Scopus', sortKey: 'hIndex' },
+  { key: 'hIndexScopus', label: 'H-индекс Scopus', sortKey: 'hIndexScopus' },
   { key: 'researcherIdWos', label: 'RESEARCHER ID WEB OF SCIENCE' },
   { key: 'hIndex', label: 'H-индекс WoS', sortKey: 'hIndex' },
   { key: 'region', label: 'Регион' },
@@ -157,9 +158,8 @@ const toEmployee = (item: BackendEmployee): Employee => {
   const scopusRaw = metrics.scopusAuthorId;
   const scopusAuthorId = typeof scopusRaw === 'string' ? scopusRaw : '';
   const hIndexScopusRaw = metrics.hIndexScopus;
-  const hIndexScopus = typeof hIndexScopusRaw === 'number'
-    ? hIndexScopusRaw
-    : Number(hIndexScopusRaw ?? hIndex);
+  // Absent when the source has no Scopus H-index; never fall back to the WoS value.
+  const hIndexScopus = typeof hIndexScopusRaw === 'number' ? hIndexScopusRaw : undefined;
   const ageRaw = metrics.age;
   const age = typeof ageRaw === 'number' ? ageRaw : Number(ageRaw ?? 0);
   const birthYear = age > 0 ? currentYear - age : 1990;
@@ -180,7 +180,7 @@ const toEmployee = (item: BackendEmployee): Employee => {
     citizenship: asStringMetric(metrics.citizenship),
     projectRole: asStringMetric(metrics.projectRole),
     hIndex: Number.isFinite(hIndex) ? hIndex : 0,
-    hIndexScopus: Number.isFinite(hIndexScopus) ? hIndexScopus : Number.isFinite(hIndex) ? hIndex : 0,
+    hIndexScopus,
     mrntiCode: asStringMetric(metrics.mrnti),
     classifier: asStringMetric(metrics.classifier),
     scopusAuthorId: scopusAuthorId || '-',
@@ -197,7 +197,8 @@ const EmployeesPage: React.FC = () => {
   const [filters, setFilters] = useState<EmployeeFilters>(() => createInitialFilters());
   const [appliedFilters, setAppliedFilters] = useState<EmployeeFilters>(() => createInitialFilters());
   
-  const [sort, setSort] = useState<SortState>({ key: 'name', direction: 'asc' });
+  // No client-side sort by default: the backend lists employees with a Scopus H-index first.
+  const [sort, setSort] = useState<SortState>({ key: '', direction: '' });
   const [visibleColumns, setVisibleColumns] = useState<Record<EmployeeColumnKey, boolean>>(() => ({
     ...initialVisibleEmployeeColumns,
   }));
@@ -306,7 +307,7 @@ const EmployeesPage: React.FC = () => {
       gender: allGenders.length,
       affiliate: allAffiliateTypes.length,
       citizenship: allCitizenships.length,
-      region: employeeFilters?.region.length || regions.length,
+      region: regions.length,
       degree: allDegrees.length,
       position: allPositions.length,
       projectRole: allProjectRoles.length,
@@ -323,7 +324,6 @@ const EmployeesPage: React.FC = () => {
       allMrntiCodes.length,
       allPositions.length,
       allProjectRoles.length,
-      employeeFilters?.region.length,
       regions.length,
     ],
   );
@@ -432,7 +432,7 @@ const EmployeesPage: React.FC = () => {
       case 'scopusAuthorId':
         return renderTruncatedText(employee.scopusAuthorId);
       case 'hIndexScopus':
-        return employee.hIndexScopus ?? employee.hIndex;
+        return employee.hIndexScopus ?? '-';
       case 'researcherIdWos':
         if (!employee.researcherIdWos || employee.researcherIdWos === '-') {
           return '-';
@@ -475,7 +475,7 @@ const EmployeesPage: React.FC = () => {
       case 'scopusAuthorId':
         return employee.scopusAuthorId;
       case 'hIndexScopus':
-        return String(employee.hIndexScopus ?? employee.hIndex);
+        return employee.hIndexScopus !== undefined ? String(employee.hIndexScopus) : '-';
       case 'researcherIdWos':
         return employee.researcherIdWos || '-';
       case 'hIndex':
@@ -505,9 +505,9 @@ const EmployeesPage: React.FC = () => {
         
         let comparison = 0;
 
-        // Обработка числовых (hIndex, birthYear)
-        if (typeof aValue === 'number' && typeof bValue === 'number') {
-          comparison = aValue - bValue;
+        // Обработка числовых (hIndex, birthYear); неизвестное значение (undefined) — ниже нуля
+        if (typeof aValue === 'number' || typeof bValue === 'number') {
+          comparison = (typeof aValue === 'number' ? aValue : -1) - (typeof bValue === 'number' ? bValue : -1);
         } 
         // Обработка строковых (имя, должность, дата)
         else if (aValue && bValue) {
@@ -968,25 +968,12 @@ const EmployeesPage: React.FC = () => {
             <p className="employees-summary">
               {t('show_employees_summary')}{filteredEmployees.length} {t('from_total_summary')}{pageMeta.total}
             </p>
-            <div className="employees-pagination">
-              <button
-                type="button"
-                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                disabled={!pageMeta.hasPrevPage || isLoading}
-              >
-                Назад
-              </button>
-              <span>
-                Страница {pageMeta.page} из {totalPages}
-              </span>
-              <button
-                type="button"
-                onClick={() => setCurrentPage((prev) => prev + 1)}
-                disabled={!pageMeta.hasNextPage || isLoading}
-              >
-                Вперёд
-              </button>
-            </div>
+            <Pagination
+              page={pageMeta.page}
+              totalPages={totalPages}
+              onChange={setCurrentPage}
+              disabled={isLoading}
+            />
           </section>
         </main>
       </div>

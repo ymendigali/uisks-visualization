@@ -8,6 +8,8 @@ import { mapRegionToId, projectsApi } from '../api/services';
 import type { BackendProject } from '../api/types';
 import { useProjectsData } from '../hooks/useProjectsData';
 import PageLoader from '../components/PageLoader/PageLoader';
+import Pagination from '../components/Pagination/Pagination';
+import YearRangeFilter from '../components/YearRangeFilter/YearRangeFilter';
 import DualScroll from '../components/DualScroll/DualScroll';
 import { exportPdfReport } from '../utils/exportPdfReport';
 import { translatePriority, translateProjectTitle } from '../utils/dataTranslations';
@@ -551,18 +553,6 @@ const ProjectsPage: React.FC = () => {
 		return () => window.removeEventListener('keydown', handleEscape);
 	}, []);
 
-	const percentage = (value: number) =>
-		((value - YEAR_RANGE.min) / (YEAR_RANGE.max - YEAR_RANGE.min)) * 100;
-
-	const rangeBackgroundStyle = useMemo<React.CSSProperties>(
-		() =>
-			({
-				'--range-start': `${percentage(filters.startYear)}%`,
-				'--range-end': `${percentage(filters.endYear)}%`,
-			} as React.CSSProperties),
-		[filters.endYear, filters.startYear],
-	);
-
 	const renderCompactText = (value: string, className = 'projects-cell-ellipsis') => (
 		<span className={className} title={value}>
 			{value}
@@ -670,18 +660,10 @@ const ProjectsPage: React.FC = () => {
 		}
 	};
 
-	const handleYearChange = (key: 'startYear' | 'endYear', value: number) => {
-		setFilters((prev) => {
-			const next = { ...prev, [key]: value };
-			if (next.startYear > next.endYear) {
-				if (key === 'startYear') {
-					next.endYear = next.startYear;
-				} else {
-					next.startYear = next.endYear;
-				}
-			}
-			return next;
-		});
+	// The period applies right away (like Scopus), without the sidebar "Применить" button.
+	const handlePeriodApply = (startYear: number, endYear: number) => {
+		setFilters((prev) => ({ ...prev, startYear, endYear }));
+		setAppliedFilters((prev) => ({ ...prev, startYear, endYear }));
 	};
 
 	const handleFilterChange = <K extends keyof FilterState>(key: K, value: FilterState[K]) => {
@@ -852,31 +834,15 @@ const ProjectsPage: React.FC = () => {
 
 					<div className="projects-filter-block">
 						<div className="projects-filter-title">{t('projects_filter_period_title')}</div>
-						<div className="period-range-slider" style={rangeBackgroundStyle}>
-							<div className="period-range-values">
-								<span className="period-range-value">{filters.startYear}</span>
-								<span className="period-range-value">{filters.endYear}</span>
-							</div>
-							<div className="period-range-track" />
-							<div className="period-range-inputs">
-								<input
-									type="range"
-									min={YEAR_RANGE.min}
-									max={YEAR_RANGE.max}
-									value={filters.startYear}
-									onChange={(event) => handleYearChange('startYear', Number(event.target.value))}
-									className="period-range-thumb"
-								/>
-								<input
-									type="range"
-									min={YEAR_RANGE.min}
-									max={YEAR_RANGE.max}
-									value={filters.endYear}
-									onChange={(event) => handleYearChange('endYear', Number(event.target.value))}
-									className="period-range-thumb period-range-thumb--upper"
-								/>
-							</div>
-						</div>
+						<YearRangeFilter
+							idPrefix="projects-period"
+							min={YEAR_RANGE.min}
+							max={YEAR_RANGE.max}
+							startYear={appliedFilters.startYear}
+							endYear={appliedFilters.endYear}
+							counts={projectFiltersMeta?.yearCounts}
+							onApply={handlePeriodApply}
+						/>
 					</div>
 
 					<div className="projects-filter-block">
@@ -1136,25 +1102,12 @@ const ProjectsPage: React.FC = () => {
 						<p className="projects-summary">
 							{t('projects_shown')} {visibleProjects.length} {t('projects_from_total')} {pageMeta.total}
 						</p>
-						<div className="projects-pagination">
-							<button
-								type="button"
-								onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-								disabled={!pageMeta.hasPrevPage || isLoading}
-							>
-								Назад
-							</button>
-							<span>
-								Страница {pageMeta.page} из {totalPages}
-							</span>
-							<button
-								type="button"
-								onClick={() => setCurrentPage((prev) => prev + 1)}
-								disabled={!pageMeta.hasNextPage || isLoading}
-							>
-								Вперёд
-							</button>
-						</div>
+						<Pagination
+							page={pageMeta.page}
+							totalPages={totalPages}
+							onChange={setCurrentPage}
+							disabled={isLoading}
+						/>
 					</section>
 				</main>
 			</div>
