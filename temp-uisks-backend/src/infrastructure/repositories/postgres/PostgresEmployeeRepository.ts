@@ -116,7 +116,8 @@ type EmployeeRow = {
   phone: string | null;
   h_index: number | string | null;
   academic_degree: string | null;
-  degree_group: string | null;
+  h_index_scopus: string | null;
+  mrnti_title: string | null;
   scopus_author_id: string | null;
   researcher_id_wos: string | null;
   orcid: string | null;
@@ -128,11 +129,59 @@ type EmployeeRow = {
   project_ids: string | null;
 };
 
-// Filter by the "Степень" column of the employees export: a short fixed list
-// (PhD, Кандидат наук, Магистр, ...) instead of the free-text academic_degree.
+// The degree filter uses the "Ученая степень" column of the employees export, a short
+// fixed list (PhD, Кандидат наук, Магистр, ...); employees without one are "Не указано".
 const toDegreeGroup = (value: string | null): string => {
   const text = toStringValue(value);
+  if (!text) {
+    return "Не указано";
+  }
   return /^ph\.?\s*d$/i.test(text) ? "PhD" : text;
+};
+
+// Top-level MRNTI section for the filter, e.g. "31.19.0" + "ХИМИЯ" -> "31 — Химия".
+const toMrntiGroup = (code: string | null, title: string | null): string => {
+  const section = toStringValue(code).match(/^\d+/)?.[0];
+  if (!section) {
+    return "";
+  }
+  const name = toStringValue(title).toLowerCase();
+  return name ? `${section} — ${name.charAt(0).toUpperCase()}${name.slice(1)}` : section;
+};
+
+// The source spells some section titles differently ("44 — Энергетика" / "44 — Электротехника");
+// give every section its most frequent title so the filter lists it once.
+const unifyMrntiGroups = (employees: Employee[]): void => {
+  const titleCounts = new Map<string, Map<string, number>>();
+  for (const employee of employees) {
+    const group = toStringValue(employee.metrics["mrntiGroup"]);
+    const section = group.split(" ")[0];
+    if (!section) continue;
+    const counts = titleCounts.get(section) ?? new Map<string, number>();
+    counts.set(group, (counts.get(group) ?? 0) + 1);
+    titleCounts.set(section, counts);
+  }
+  const canonical = new Map(
+    Array.from(titleCounts.entries()).map(([section, counts]) => [
+      section,
+      Array.from(counts.entries()).sort((a, b) => b[1] - a[1])[0][0]
+    ])
+  );
+  for (const employee of employees) {
+    const section = toStringValue(employee.metrics["mrntiGroup"]).split(" ")[0];
+    if (section) {
+      employee.metrics["mrntiGroup"] = canonical.get(section) ?? employee.metrics["mrntiGroup"];
+    }
+  }
+};
+
+// "H-index SCOPUS" is a number or a placeholder such as "не указано" (unknown).
+const toOptionalNumber = (value: string | null): number | null => {
+  const text = toStringValue(value).replace(",", ".");
+  if (!/^\d+(\.\d+)?$/.test(text)) {
+    return null;
+  }
+  return Number(text);
 };
 
 export class PostgresEmployeeRepository implements EmployeeRepository {
@@ -167,7 +216,7 @@ export class PostgresEmployeeRepository implements EmployeeRepository {
       citizenship: sortUniqueStrings(employees.map((employee) => toStringValue(employee.metrics["citizenship"]))),
       projectRole: sortUniqueStrings(employees.map((employee) => toStringValue(employee.metrics["projectRole"]))),
       hIndexGroup: sortUniqueStrings(employees.map((employee) => toStringValue(employee.metrics["hIndexGroup"]))),
-      mrnti: sortUniqueStrings(employees.map((employee) => toStringValue(employee.metrics["mrnti"]))),
+      mrnti: sortUniqueStrings(employees.map((employee) => toStringValue(employee.metrics["mrntiGroup"]))),
       classifier: sortUniqueStrings(employees.map((employee) => toStringValue(employee.metrics["classifier"]))),
       minAge: ages.length ? Math.min(...ages) : 0,
       maxAge: ages.length ? Math.max(...ages) : 0
@@ -189,7 +238,7 @@ export class PostgresEmployeeRepository implements EmployeeRepository {
       citizenship: toCountedStrings(employees.map((employee) => toStringValue(employee.metrics["citizenship"]))),
       projectRole: toCountedStrings(employees.map((employee) => toStringValue(employee.metrics["projectRole"]))),
       hIndexGroup: toCountedStrings(employees.map((employee) => toStringValue(employee.metrics["hIndexGroup"]))),
-      mrnti: toCountedStrings(employees.map((employee) => toStringValue(employee.metrics["mrnti"]))),
+      mrnti: toCountedStrings(employees.map((employee) => toStringValue(employee.metrics["mrntiGroup"]))),
       classifier: toCountedStrings(employees.map((employee) => toStringValue(employee.metrics["classifier"]))),
       minAge: ages.length ? Math.min(...ages) : 0,
       maxAge: ages.length ? Math.max(...ages) : 0
@@ -201,15 +250,22 @@ export class PostgresEmployeeRepository implements EmployeeRepository {
       SELECT
         id, name, position, department, region, email, phone, h_index, academic_degree,
         scopus_author_id, researcher_id_wos, orcid, gender, citizenship, project_role,
-        mrnti, classifier, project_ids, excel_data->>'Степень' AS degree_group
+        mrnti, classifier, project_ids, excel_data->>'H-index SCOPUS' AS h_index_scopus,
+        excel_data->>'1-Т.МРНТИ-УР1' AS mrnti_title
       FROM ${this.qualifiedTable}
-      ORDER BY (name ~ '^[А-Яа-яЁё]') DESC, name
+      -- Employees with a Scopus H-index first (highest first), then the rest alphabetically.
+      ORDER BY
+        CASE WHEN excel_data->>'H-index SCOPUS' ~ '^[0-9]+(\.[0-9]+)?$'
+          THEN (excel_data->>'H-index SCOPUS')::numeric END DESC NULLS LAST,
+        (name ~ '^[А-Яа-яЁё]') DESC,
+        name
     `;
 
     const rows = (await this.pool.query<EmployeeRow>(query)).rows;
 
     const base: Employee[] = rows.map((row) => {
       const hIndex = toNumber(row.h_index);
+      const hIndexScopus = toOptionalNumber(row.h_index_scopus);
       const region = cleanText(row.region);
 
       return {
@@ -228,7 +284,7 @@ export class PostgresEmployeeRepository implements EmployeeRepository {
         metrics: {
           hIndex,
           academicDegree: cleanText(row.academic_degree),
-          degreeGroup: toDegreeGroup(row.degree_group),
+          degreeGroup: toDegreeGroup(row.academic_degree),
           scopusAuthorId: cleanText(row.scopus_author_id),
           researcherIdWos: cleanText(row.researcher_id_wos),
           orcid: cleanText(row.orcid),
@@ -239,8 +295,11 @@ export class PostgresEmployeeRepository implements EmployeeRepository {
           projectRole: cleanText(row.project_role),
           hIndexGroup: toHIndexGroup(hIndex),
           mrnti: cleanText(row.mrnti),
+          mrntiGroup: toMrntiGroup(row.mrnti, row.mrnti_title),
           classifier: cleanText(row.classifier),
-          status: "подтвержденный"
+          status: "подтвержденный",
+          // Omitted when the export has no Scopus H-index for the employee.
+          ...(hIndexScopus !== null ? { hIndexScopus } : {})
         },
         bio: "Не указано",
         publicationsIds: []
@@ -248,6 +307,8 @@ export class PostgresEmployeeRepository implements EmployeeRepository {
     });
 
     const searchTerm = filters.searchTerm ?? filters.q;
+
+    unifyMrntiGroups(base);
 
     return withOverlay(base, this.localEmployees, this.deletedEmployeeIds).filter((employee) => {
       if (filters.region && !matchesRegion(employee.region, filters.region)) {
@@ -274,8 +335,14 @@ export class PostgresEmployeeRepository implements EmployeeRepository {
       if (filters.hIndexGroup && !isSame(toStringValue(employee.metrics["hIndexGroup"]), filters.hIndexGroup)) {
         return false;
       }
-      if (filters.mrnti && !contains(toStringValue(employee.metrics["mrnti"]), filters.mrnti)) {
-        return false;
+      if (filters.mrnti) {
+        // Options are top-level sections ("31 — Химия"); match on the code's first segment.
+        const section = filters.mrnti.match(/^\d+/)?.[0];
+        const code = toStringValue(employee.metrics["mrnti"]);
+        const matches = section ? code.split(".")[0] === section : contains(code, filters.mrnti);
+        if (!matches) {
+          return false;
+        }
       }
       if (filters.classifier && !contains(toStringValue(employee.metrics["classifier"]), filters.classifier)) {
         return false;

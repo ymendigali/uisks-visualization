@@ -81,6 +81,8 @@ export interface ProjectFilterMeta {
   customer: FilterOptionCountString[];
   mrnti: FilterOptionCountString[];
   trl: FilterOptionCountString[];
+  // Projects running in each year, counted with every filter except the period itself.
+  yearCounts: FilterOptionCountNumber[];
 }
 
 export interface EmployeeFilterOptions {

@@ -74,6 +74,59 @@ const normalize = (value) => String(value ?? "").toLowerCase().trim();
 const normalizeName = (value) => String(value ?? "").toLowerCase().replace(/\s+/g, " ").trim();
 const toStringValue = (value) => String(value ?? "").replace(/\s+/g, " ").trim();
 
+// Placeholder values in exports that mean "no data".
+const UNKNOWN_VALUES = new Set(["", "-", "не указано", "не указан", "нет", "нигде", "другое"]);
+const knownOrEmpty = (value) => (UNKNOWN_VALUES.has(normalize(value)) ? "" : toStringValue(value));
+
+// Exports fill ID cells with placeholders ("0", "123", "000000", ORCIDs, e-mails...).
+// Keep only well-formed IDs; the raw cell stays in excel_data.
+const toScopusAuthorId = (value) => {
+  const text = toStringValue(value);
+  return /^\d{10,11}$/.test(text) && !/^(\d)\1+$/.test(text) ? text : "";
+};
+
+// ResearcherID looks like "AAE-9753-2019"; it is often wrapped in a URL or a label.
+const toResearcherId = (value) => {
+  const match = toStringValue(value).match(/(?:^|[^A-Za-z])([A-Za-z]{1,4})\s*-\s*(\d{4})\s*-\s*(\d{4})(?!\d)/);
+  return match ? `${match[1].toUpperCase()}-${match[2]}-${match[3]}` : "";
+};
+
+// Kazakhstan regions are stored under the map's canonical names so that region
+// filters match ("Мангыстауская" vs "Мангистауская область", "город Алматы" ...).
+const REGION_ALIASES = [
+  ["астана", "Город Астана"],
+  ["шымкент", "Город Шымкент"],
+  ["алматинская", "Алматинская область"],
+  ["алматы", "Город Алматы"],
+  ["западно-казахстан", "Западно-Казахстанская область"],
+  ["восточно-казахстан", "Восточно-Казахстанская область"],
+  ["северо-казахстан", "Северо-Казахстанская область"],
+  ["жетысу", "Жетысуская область"],
+  ["мангыстау", "Мангистауская область"],
+  ["мангистау", "Мангистауская область"],
+  ["акмолинская", "Акмолинская область"],
+  ["атырау", "Атырауская область"],
+  ["карагандинская", "Карагандинская область"],
+  ["туркестанская", "Туркестанская область"],
+  ["кызылординская", "Кызылординская область"],
+  ["улытау", "Улытауская область"],
+  ["абайская", "Абайская область"],
+  ["павлодарская", "Павлодарская область"],
+  ["жамбылская", "Жамбылская область"],
+  ["костанайская", "Костанайская область"],
+  ["актюбинская", "Актюбинская область"]
+];
+
+const canonicalRegion = (value) => {
+  const text = knownOrEmpty(value);
+  const match = REGION_ALIASES.find(([needle]) => normalize(text).includes(needle));
+  return match ? match[1] : text;
+};
+
+// Fields whose column exists in at least one input file. In --merge mode these
+// replace stored values (an empty cell clears them); other fields keep theirs.
+const presentFields = new Set();
+
 const isExcelFile = (fileName) => /\.(xlsx|xlsm|xls)$/i.test(fileName);
 
 const resolveInputFiles = (rawPaths) => {
@@ -207,6 +260,19 @@ const parseWorkbookRows = (workbook, sourceFile) => {
 
   const rows = xlsx.utils.sheet_to_json(sheet, { defval: "", raw: true });
   const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
+  const hasHeader = (aliases) => headers.some((header) => aliases.some((alias) => normalize(header) === normalize(alias)));
+  const FIELD_HEADERS = {
+    region: ["Регион"],
+    academicDegree: ["Ученая степень", "Степень"],
+    scopusAuthorId: ["Author ID SCOPUS"],
+    researcherIdWos: ["Researcher ID web of science"],
+    citizenship: ["Гражданство"],
+    department: ["Место работы"],
+    hIndex: ["H-index"]
+  };
+  for (const [field, aliases] of Object.entries(FIELD_HEADERS)) {
+    if (hasHeader(aliases)) presentFields.add(field);
+  }
 
   return rows
     .map((row, index) => {
@@ -215,20 +281,19 @@ const parseWorkbookRows = (workbook, sourceFile) => {
         return null;
       }
 
-      const citizenship = toStringValue(findField(row, ["Гражданство"]));
-      const rawDegree = toStringValue(findField(row, ["Ученая степень", "Степень"]));
-      const academicDegree = normalize(rawDegree) === "нет" ? "" : rawDegree;
+      const citizenship = knownOrEmpty(findField(row, ["Гражданство"]));
+      const academicDegree = knownOrEmpty(findField(row, ["Ученая степень", "Степень"]));
       const position = toStringValue(findField(row, ["Ученое звание"]));
-      const scopusAuthorId = toStringValue(findField(row, ["Author ID SCOPUS"]));
-      const researcherIdWos = toStringValue(findField(row, ["Researcher ID web of science"]));
+      const scopusAuthorId = toScopusAuthorId(findField(row, ["Author ID SCOPUS"]));
+      const researcherIdWos = toResearcherId(findField(row, ["Researcher ID web of science"]));
       const orcid = toStringValue(findField(row, ["ORCID ID"]));
       const hIndexRaw = findField(row, ["H-index"]);
-      const hIndex = hIndexRaw === "" ? null : toNumber(hIndexRaw);
-      const region = toStringValue(findField(row, ["Регион"]));
+      const hIndex = knownOrEmpty(hIndexRaw) === "" ? null : toNumber(hIndexRaw);
+      const region = canonicalRegion(findField(row, ["Регион"]));
       const gender = toStringValue(findField(row, ["Gender"])) || toStringValue(findField(row, ["Пол"]));
-      const department = toStringValue(findField(row, ["Место работы"]));
+      const department = knownOrEmpty(findField(row, ["Место работы"]));
       const classifier = toStringValue(findField(row, ["Классификатор научных направлений"]));
-      const mrnti = toStringValue(findField(row, ["МРНТИ"]));
+      const mrnti = knownOrEmpty(findField(row, ["МРНТИ", "Код МРНТИ"]));
       const leadCodes = parseCodes(findField(row, ["Отчет н.р.", "НР в проекте"]));
       const memberCodes = parseCodes(findField(row, ["Отчет ч.и.г.", "ЧИГ в проекте"]));
       const projectIds = Array.from(new Set([...leadCodes, ...memberCodes]));
@@ -285,22 +350,34 @@ const client = new Client({
 
 await client.connect();
 
-// In merge mode, rows are matched to existing employees by normalized full name,
-// so updated Excel exports (which may lack Scopus ID/region) update the same record.
+// In merge mode, rows are matched to existing employees by normalized full name.
+// Scopus Author ID only tells namesakes apart: exports reuse one ID for different
+// people, so it is never trusted on its own. Each stored employee is claimed by at
+// most one file row, so namesakes stay separate records.
 let matchedExisting = 0;
 if (merge) {
   const tableExists = await client.query("SELECT to_regclass($1) AS name", [env.table]);
   if (tableExists.rows[0]?.name) {
-    const existing = await client.query(`SELECT id, name FROM ${tableName} ORDER BY id`);
-    const idByName = new Map();
-    for (const { id, name } of existing.rows) {
+    const existing = await client.query(
+      `SELECT id, name, scopus_author_id, excel_data->>'Author ID SCOPUS' AS raw_scopus FROM ${tableName} ORDER BY id`
+    );
+    const candidatesByName = new Map();
+    for (const { id, name, scopus_author_id: scopusId, raw_scopus: rawScopus } of existing.rows) {
       const key = normalizeName(name);
-      if (!idByName.has(key)) idByName.set(key, id);
+      const scopusIds = new Set([toScopusAuthorId(rawScopus), toScopusAuthorId(scopusId)].filter(Boolean));
+      candidatesByName.set(key, [...(candidatesByName.get(key) ?? []), { id, scopusIds }]);
     }
-    for (const row of allRows) {
-      const existingId = idByName.get(normalizeName(row.name));
-      if (existingId) {
-        row.id = existingId;
+
+    const claimed = new Set();
+    // Rows with a Scopus ID go first so they take the namesake record holding that ID.
+    const ordered = [...allRows].sort((a, b) => Number(Boolean(b.scopusAuthorId)) - Number(Boolean(a.scopusAuthorId)));
+    for (const row of ordered) {
+      const candidates = (candidatesByName.get(normalizeName(row.name)) ?? []).filter((item) => !claimed.has(item.id));
+      const match =
+        (row.scopusAuthorId && candidates.find((item) => item.scopusIds.has(row.scopusAuthorId))) || candidates[0];
+      if (match) {
+        row.id = match.id;
+        claimed.add(match.id);
         matchedExisting += 1;
       }
     }
@@ -392,21 +469,23 @@ try {
       updated_at = NOW()
   `;
 
-  // Fields missing from the file (NULL) keep their current values; a more detailed
-  // existing academic degree is preferred over the generic one from newer exports.
+  // Fields whose column is in the file replace stored values; fields missing from
+  // the file keep them (COALESCE with NULL).
   const t = tableName;
+  const fromFile = (field, column, fileValue, fallback = `${t}.${column}`) =>
+    presentFields.has(field) ? fileValue : `COALESCE(${fileValue}, ${fallback})`;
   const mergeSql = replaceSql.replace(/ON CONFLICT \(id\) DO UPDATE[\s\S]*$/, `ON CONFLICT (id) DO UPDATE
     SET
       position = COALESCE(EXCLUDED.position, ${t}.position),
-      department = COALESCE(EXCLUDED.department, ${t}.department),
-      region = COALESCE($5, ${t}.region),
-      h_index = COALESCE($6, ${t}.h_index),
-      academic_degree = COALESCE(${t}.academic_degree, EXCLUDED.academic_degree),
-      scopus_author_id = COALESCE(EXCLUDED.scopus_author_id, ${t}.scopus_author_id),
-      researcher_id_wos = COALESCE(EXCLUDED.researcher_id_wos, ${t}.researcher_id_wos),
+      department = ${fromFile("department", "department", "EXCLUDED.department")},
+      region = ${presentFields.has("region") ? "EXCLUDED.region" : `COALESCE($5, ${t}.region)`},
+      h_index = ${presentFields.has("hIndex") ? "COALESCE($6, 0)" : `COALESCE($6, ${t}.h_index)`},
+      academic_degree = ${fromFile("academicDegree", "academic_degree", "EXCLUDED.academic_degree")},
+      scopus_author_id = ${fromFile("scopusAuthorId", "scopus_author_id", "EXCLUDED.scopus_author_id")},
+      researcher_id_wos = ${fromFile("researcherIdWos", "researcher_id_wos", "EXCLUDED.researcher_id_wos")},
       orcid = COALESCE(EXCLUDED.orcid, ${t}.orcid),
       gender = COALESCE(EXCLUDED.gender, ${t}.gender),
-      citizenship = COALESCE(EXCLUDED.citizenship, ${t}.citizenship),
+      citizenship = ${fromFile("citizenship", "citizenship", "EXCLUDED.citizenship")},
       project_role = COALESCE(EXCLUDED.project_role, ${t}.project_role),
       mrnti = COALESCE(EXCLUDED.mrnti, ${t}.mrnti),
       classifier = COALESCE(EXCLUDED.classifier, ${t}.classifier),

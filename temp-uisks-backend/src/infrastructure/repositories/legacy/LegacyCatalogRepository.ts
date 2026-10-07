@@ -258,7 +258,8 @@ export class LegacyProjectRepository implements ProjectRepository {
       contest: toCountedStrings(projects.map((project) => project.contest ?? "").filter(Boolean)),
       customer: toCountedStrings(projects.map((project) => project.customer ?? "").filter(Boolean)),
       mrnti: await collectSqlValues("МРНТИ.txt"),
-      trl: await collectSqlValues("ТРЛ.txt")
+      trl: await collectSqlValues("ТРЛ.txt"),
+      yearCounts: []
     };
   }
 

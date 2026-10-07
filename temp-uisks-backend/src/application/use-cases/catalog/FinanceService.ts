@@ -41,6 +41,8 @@ type FinanceFilterOptions = {
 type FinanceFilterMeta = {
   region: FilterCount[];
   yearRange: Array<{ value: number; count: number }>;
+  // Projects running in each year, counted with every filter except the period itself.
+  yearCounts: Array<{ value: number; count: number }>;
   minYear: number;
   maxYear: number;
   irn: FilterCount[];
@@ -451,7 +453,20 @@ export class FinanceService {
   }
 
   async getFilterMeta(query: FinanceSummaryFilters = {}): Promise<FinanceFilterMeta> {
-    const projects = (await this.listAllProjects()).filter((project) => this.matchesProject(project, query));
+    const allProjects = await this.listAllProjects();
+    const projects = allProjects.filter((project) => this.matchesProject(project, query));
+    const withoutPeriod = { ...query, year: undefined, yearFrom: undefined, yearTo: undefined, startYear: undefined, endYear: undefined };
+    const yearCounts: number[] = [];
+    for (const project of allProjects.filter((item) => this.matchesProject(item, withoutPeriod))) {
+      const period = parsePeriodYears(toStringValue(toRecord(project.excelData)["Период реализации"]));
+      const fromYear = project.startYear ?? parseYear(project.startDate) ?? period.startYear;
+      const toYear = project.endYear ?? parseYear(project.endDate) ?? period.endYear ?? fromYear;
+      if (fromYear && toYear && toYear >= fromYear) {
+        for (let currentYear = fromYear; currentYear <= toYear; currentYear += 1) {
+          yearCounts.push(currentYear);
+        }
+      }
+    }
 
     const years: number[] = [];
     const regions: string[] = [];
@@ -501,6 +516,7 @@ export class FinanceService {
     return {
       region: toCountedStrings(regions),
       yearRange: toCountedNumbers(years),
+      yearCounts: toCountedNumbers(yearCounts),
       minYear,
       maxYear,
       irn: toCountedStrings(irn),

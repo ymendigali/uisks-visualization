@@ -283,6 +283,22 @@ type ProjectRow = {
   excel_data: unknown;
 };
 
+// Number of projects running in each year of their period (a 2023–2025 project counts in 3 years).
+const countProjectsByYear = (projects: Project[]): Array<{ value: number; count: number }> => {
+  const counts = new Map<number, number>();
+  for (const project of projects) {
+    const start = project.startYear;
+    const end = project.endYear ?? start;
+    if (!start || !end || end < start) continue;
+    for (let year = start; year <= end; year += 1) {
+      counts.set(year, (counts.get(year) ?? 0) + 1);
+    }
+  }
+  return Array.from(counts.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([value, count]) => ({ value, count }));
+};
+
 export class PostgresProjectRepository implements ProjectRepository {
   private readonly localProjects = new Map<string, Project>();
   private readonly deletedProjectIds = new Set<string>();
@@ -346,7 +362,10 @@ export class PostgresProjectRepository implements ProjectRepository {
       contest: toCountedStrings(projects.map((project) => toStringValue(project.contest)).filter(Boolean)),
       customer: toCountedStrings(projects.map((project) => toStringValue(project.customer)).filter(Boolean)),
       mrnti: toCountedStrings(projects.map((project) => toStringValue(project.mrnti)).filter(Boolean)),
-      trl: toCountedStrings(projects.map((project) => toTrlLabel(project.trl)).filter(Boolean))
+      trl: toCountedStrings(projects.map((project) => toTrlLabel(project.trl)).filter(Boolean)),
+      yearCounts: countProjectsByYear(
+        await this.listAll({ ...filters, startYear: undefined, endYear: undefined })
+      )
     };
   }
 
