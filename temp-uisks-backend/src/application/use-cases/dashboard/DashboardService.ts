@@ -1,4 +1,4 @@
-import { EmployeeRepository, ProjectRepository } from "../../ports/CatalogRepositories";
+import { EmployeeRepository, ProjectRepository, ProjectResultRepository } from "../../ports/CatalogRepositories";
 import { DashboardSummary } from "../../../domain/dashboard/DashboardSummary";
 import { MAX_LIMIT } from "../../ports/Pagination";
 
@@ -244,7 +244,8 @@ const getProjectOrganization = (projectLead: string, excelData: Record<string, u
 export class DashboardService {
   constructor(
     private readonly projectRepository: ProjectRepository,
-    private readonly employeeRepository: EmployeeRepository
+    private readonly employeeRepository: EmployeeRepository,
+    private readonly projectResultRepository: ProjectResultRepository
   ) {}
 
   async getFilters(): Promise<DashboardFilterOptions> {
@@ -341,11 +342,15 @@ export class DashboardService {
     let durationSumYears = 0;
     let durationCount = 0;
 
-    const uniquePeople = new Set<string>();
+    // Publications, patents and implementations come from the project results registry
+    // (same source as the Publications page), matched to projects by IRN.
+    const resultsByIrn = new Map(
+      (await this.projectResultRepository.listAll()).map((result) => [normalize(result.irn), result])
+    );
 
     const byRegionMap = new Map<
       string,
-      { projects: number; employees: Set<string>; publications: number; budgetRaw: number; grants: number; programs: number }
+      { projects: number; employees: number; publications: number; budgetRaw: number; grants: number; programs: number }
     >();
 
     for (const project of projects) {
@@ -361,20 +366,15 @@ export class DashboardService {
         contracts += 1;
       }
 
-      const domestic = pickExcelNumber(excelData, ["Отечественные публикации"]);
-      const foreign = pickExcelNumber(excelData, ["Зарубежные публикации"]);
-      const projectTotalPublications = domestic + foreign;
+      const result = resultsByIrn.get(normalize(project.id));
+      const projectTotalPublications = result ? result.domesticPublications + result.foreignPublications : 0;
       totalPublications += projectTotalPublications;
+      journals += result ? result.scopusPublications + result.wosPublications : 0;
+      securityDocuments += result?.patents ?? 0;
+      implementations += result?.implementations ?? 0;
 
-      const scopus = pickExcelNumber(excelData, ["Публикаций Scopus"]);
-      const wos = pickExcelNumber(excelData, ["Публикаций Web of science", "Публикаций Web of Science"]);
-      journals += scopus + wos;
-
-      const projectBooks = pickExcelNumber(excelData, ["Количество книг"]);
-      books += projectBooks;
-
-      securityDocuments += pickExcelCount(excelData, ["Количество Патентов"]);
-      implementations += pickExcelCount(excelData, ["Количество внедрений"]);
+      // Books are not part of the results registry; only older project imports carry them.
+      books += pickExcelCount(excelData, ["Количество книг"]);
 
       const budgetRaw = Math.max(project.budget, 0);
       totalBudgetRaw += budgetRaw;
@@ -395,15 +395,10 @@ export class DashboardService {
         }
       }
 
-      const leader = pickExcelString(excelData, ["Научный руководитель", "Заявитель"]);
-      if (leader) {
-        uniquePeople.add(leader);
-      }
-
       const regionKey = project.region || pickExcelString(excelData, ["Регион заявителя", "Регион", "Город заявителя"]) || "—";
       const regionBucket = byRegionMap.get(regionKey) ?? {
         projects: 0,
-        employees: new Set<string>(),
+        employees: 0,
         publications: 0,
         budgetRaw: 0,
         grants: 0,
@@ -417,9 +412,6 @@ export class DashboardService {
         regionBucket.grants += 1;
       } else if (financingType === "program") {
         regionBucket.programs += 1;
-      }
-      if (leader) {
-        regionBucket.employees.add(leader);
       }
       byRegionMap.set(regionKey, regionBucket);
     }
@@ -436,11 +428,14 @@ export class DashboardService {
     conferences = Math.max(totalPublications - journals - books, 0);
     const other = Math.max(totalPublications - journals - conferences - books, 0);
 
-    const employees = await this.employeeRepository.list({
-      region: isAllRegionValue(region) ? undefined : region,
-      page: 1,
-      limit: MAX_LIMIT
-    });
+    const regionEmployees = await this.listAllEmployees(isAllRegionValue(region) ? undefined : region);
+    const employees = {
+      items: regionEmployees.filter((employee) => matchesTextFilter(employee.department, organization))
+    };
+
+    for (const [regionName, bucket] of byRegionMap) {
+      bucket.employees = employees.items.filter((employee) => matchesRegion(employee.region, regionName)).length;
+    }
 
     let doctors = 0;
     let candidates = 0;
@@ -478,7 +473,7 @@ export class DashboardService {
       .map(([regionName, value]) => ({
         region: regionName,
         projects: value.projects,
-        employees: value.employees.size,
+        employees: value.employees,
         publications: value.publications,
         budget: Number((value.budgetRaw / 1_000_000_000).toFixed(2)),
         grants: value.grants,
@@ -508,7 +503,7 @@ export class DashboardService {
         implementations: Math.round(implementations)
       },
       people: {
-        total: uniquePeople.size,
+        total: employees.items.length,
         docents: doctors,
         professors: candidates,
         associateProfessors: masters,
@@ -527,6 +522,22 @@ export class DashboardService {
       },
       byRegion
     };
+  }
+
+  private async listAllEmployees(region?: string) {
+    const items = [];
+    let page = 1;
+
+    while (true) {
+      const result = await this.employeeRepository.list({ region, page, limit: MAX_LIMIT });
+      items.push(...result.items);
+      if (!result.meta.hasNextPage) {
+        break;
+      }
+      page += 1;
+    }
+
+    return items;
   }
 
   private async listAllProjects() {

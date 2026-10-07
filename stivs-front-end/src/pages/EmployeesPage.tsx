@@ -272,10 +272,6 @@ const EmployeesPage: React.FC = () => {
     () => new Map((employeeFiltersMeta?.degree ?? []).map((item) => [item.value, item.count])),
     [employeeFiltersMeta?.degree],
   );
-  const departmentCountByValue = useMemo(
-    () => new Map((employeeFiltersMeta?.department ?? []).map((item) => [item.value, item.count])),
-    [employeeFiltersMeta?.department],
-  );
   const projectRoleCountByValue = useMemo(
     () => new Map((employeeFiltersMeta?.projectRole ?? []).map((item) => [item.value, item.count])),
     [employeeFiltersMeta?.projectRole],
@@ -305,12 +301,6 @@ const EmployeesPage: React.FC = () => {
     [employeeFilters?.projectRole, employeesData],
   );
 
-  const allDepartments = useMemo(
-    () => (employeeFilters?.department.length
-      ? employeeFilters.department
-      : Array.from(new Set(employeesData.map((employee) => employee.department))).sort()),
-    [employeeFilters?.department, employeesData],
-  );
   const employeesAvailableCounts = useMemo(
     () => ({
       gender: allGenders.length,
@@ -319,7 +309,6 @@ const EmployeesPage: React.FC = () => {
       region: employeeFilters?.region.length || regions.length,
       degree: allDegrees.length,
       position: allPositions.length,
-      department: allDepartments.length,
       projectRole: allProjectRoles.length,
       mrnti: allMrntiCodes.length,
       classifier: 3,
@@ -329,7 +318,6 @@ const EmployeesPage: React.FC = () => {
       allAffiliateTypes.length,
       allCitizenships.length,
       allDegrees.length,
-      allDepartments.length,
       allGenders.length,
       allHIndexGroups.length,
       allMrntiCodes.length,
@@ -795,28 +783,6 @@ const EmployeesPage: React.FC = () => {
                     </option>
                   ))}
                 </select>
-              </div>
-
-              <div className="employees-filter-item">
-                <label htmlFor="department-filter">
-                  {t('filter_label_department')}
-                  <span className="employees-filter-badge">доступно {employeesAvailableCounts.department}</span>
-                </label>
-                <SearchableSelect
-                  id="department-filter"
-                  value={filters.department}
-                  onChange={(nextValue) => handleFilterChange('department', nextValue)}
-                  allLabel={t('filter_option_all_departments')}
-                  placeholder={t('filter_search_placeholder')}
-                  options={allDepartments.map((department) => ({
-                    value: department,
-                    label:
-                      department +
-                      (departmentCountByValue.get(department) !== undefined
-                        ? ` (${departmentCountByValue.get(department)})`
-                        : ''),
-                  }))}
-                />
               </div>
 
               <div className="employees-filter-item">

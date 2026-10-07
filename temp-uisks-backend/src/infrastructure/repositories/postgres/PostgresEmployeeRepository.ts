@@ -116,6 +116,7 @@ type EmployeeRow = {
   phone: string | null;
   h_index: number | string | null;
   academic_degree: string | null;
+  degree_group: string | null;
   scopus_author_id: string | null;
   researcher_id_wos: string | null;
   orcid: string | null;
@@ -125,6 +126,13 @@ type EmployeeRow = {
   mrnti: string | null;
   classifier: string | null;
   project_ids: string | null;
+};
+
+// Filter by the "Степень" column of the employees export: a short fixed list
+// (PhD, Кандидат наук, Магистр, ...) instead of the free-text academic_degree.
+const toDegreeGroup = (value: string | null): string => {
+  const text = toStringValue(value);
+  return /^ph\.?\s*d$/i.test(text) ? "PhD" : text;
 };
 
 export class PostgresEmployeeRepository implements EmployeeRepository {
@@ -155,7 +163,7 @@ export class PostgresEmployeeRepository implements EmployeeRepository {
       department: sortUniqueStrings(employees.map((employee) => employee.department)),
       affiliateType: sortUniqueStrings(employees.map((employee) => toStringValue(employee.metrics["affiliateType"]))),
       gender: sortUniqueStrings(employees.map((employee) => toStringValue(employee.metrics["gender"]))),
-      degree: sortUniqueStrings(employees.map((employee) => toStringValue(employee.metrics["academicDegree"]))),
+      degree: sortUniqueStrings(employees.map((employee) => toStringValue(employee.metrics["degreeGroup"]))),
       citizenship: sortUniqueStrings(employees.map((employee) => toStringValue(employee.metrics["citizenship"]))),
       projectRole: sortUniqueStrings(employees.map((employee) => toStringValue(employee.metrics["projectRole"]))),
       hIndexGroup: sortUniqueStrings(employees.map((employee) => toStringValue(employee.metrics["hIndexGroup"]))),
@@ -177,7 +185,7 @@ export class PostgresEmployeeRepository implements EmployeeRepository {
       department: toCountedStrings(employees.map((employee) => employee.department)),
       affiliateType: toCountedStrings(employees.map((employee) => toStringValue(employee.metrics["affiliateType"]))),
       gender: toCountedStrings(employees.map((employee) => toStringValue(employee.metrics["gender"]))),
-      degree: toCountedStrings(employees.map((employee) => toStringValue(employee.metrics["academicDegree"]))),
+      degree: toCountedStrings(employees.map((employee) => toStringValue(employee.metrics["degreeGroup"]))),
       citizenship: toCountedStrings(employees.map((employee) => toStringValue(employee.metrics["citizenship"]))),
       projectRole: toCountedStrings(employees.map((employee) => toStringValue(employee.metrics["projectRole"]))),
       hIndexGroup: toCountedStrings(employees.map((employee) => toStringValue(employee.metrics["hIndexGroup"]))),
@@ -193,7 +201,7 @@ export class PostgresEmployeeRepository implements EmployeeRepository {
       SELECT
         id, name, position, department, region, email, phone, h_index, academic_degree,
         scopus_author_id, researcher_id_wos, orcid, gender, citizenship, project_role,
-        mrnti, classifier, project_ids
+        mrnti, classifier, project_ids, excel_data->>'Степень' AS degree_group
       FROM ${this.qualifiedTable}
       ORDER BY (name ~ '^[А-Яа-яЁё]') DESC, name
     `;
@@ -220,6 +228,7 @@ export class PostgresEmployeeRepository implements EmployeeRepository {
         metrics: {
           hIndex,
           academicDegree: cleanText(row.academic_degree),
+          degreeGroup: toDegreeGroup(row.degree_group),
           scopusAuthorId: cleanText(row.scopus_author_id),
           researcherIdWos: cleanText(row.researcher_id_wos),
           orcid: cleanText(row.orcid),
@@ -271,21 +280,8 @@ export class PostgresEmployeeRepository implements EmployeeRepository {
       if (filters.classifier && !contains(toStringValue(employee.metrics["classifier"]), filters.classifier)) {
         return false;
       }
-      if (filters.degree) {
-        const degree = toStringValue(employee.metrics["academicDegree"]);
-        const degreeAliases: Record<string, string[]> = {
-          doctor: ["доктор", "doctor"],
-          candidate: ["кандидат", "candidate"],
-          phd: ["phd", "ph.d"],
-          master: ["магистр", "master"],
-          none: ["нет", "none"]
-        };
-
-        const aliases = degreeAliases[normalize(filters.degree)] ?? [filters.degree];
-        const hasMatch = aliases.some((alias) => contains(degree, alias));
-        if (!hasMatch) {
-          return false;
-        }
+      if (filters.degree && !isSame(toStringValue(employee.metrics["degreeGroup"]), filters.degree)) {
+        return false;
       }
       const age = toNumber(employee.metrics["age"]);
       if (age > 0) {

@@ -82,7 +82,22 @@ button {
   margin: 0;
 }
 
-.period-range-thumb::-webkit-slider-thumb,
+/* Vendor pseudo-elements must stay in separate rules: a browser drops the whole
+   rule when one selector in the list is unknown to it, and without
+   pointer-events on the thumb the slider cannot be dragged at all. */
+.period-range-thumb::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  pointer-events: all;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #2563eb;
+  border: 2px solid #ffffff;
+  box-shadow: 0 1px 4px rgba(37, 99, 235, 0.35);
+  cursor: pointer;
+}
+
 .period-range-thumb::-moz-range-thumb {
   pointer-events: all;
   width: 14px;
@@ -94,7 +109,10 @@ button {
   cursor: pointer;
 }
 
-.period-range-thumb::-webkit-slider-runnable-track,
+.period-range-thumb::-webkit-slider-runnable-track {
+  background: transparent;
+}
+
 .period-range-thumb::-moz-range-track {
   background: transparent;
 }

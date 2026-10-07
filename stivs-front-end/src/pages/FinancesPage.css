@@ -952,3 +952,36 @@
     flex: 1 1 100%;
   }
 }
+/* Searchable dropdowns (applicant, contest, customer): their list stays within the
+   field width instead of stretching to the longest name. Values mirror the computed
+   look of the native .finances-filter-select (its CSS variables are not defined). */
+.finances-filter-group .searchable-select-input {
+  height: auto;
+  padding: 0.65rem 2.2rem 0.65rem 1rem;
+  border-radius: 0;
+  border: 1px solid rgba(191, 219, 254, 0.8);
+  background: transparent
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%231f2937' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")
+    no-repeat right 0.75rem center;
+  font-family: Arial, sans-serif;
+  font-size: 13.3333px;
+  font-weight: 600;
+  line-height: normal;
+  color: #1f2937;
+  text-overflow: ellipsis;
+}
+
+.finances-filter-group .searchable-select-input::placeholder {
+  color: #1f2937;
+  font-weight: 600;
+}
+
+.finances-filter-group .searchable-select-input:focus {
+  background-color: #ffffff;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+}
+
+.finances-filter-group .searchable-select-input:focus::placeholder {
+  color: #94a3b8;
+}

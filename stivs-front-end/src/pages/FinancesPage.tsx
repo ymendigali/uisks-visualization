@@ -24,6 +24,7 @@ import { financesApi } from '../api/services';
 import { translatePriority } from '../utils/dataTranslations';
 import type { FinanceFilterMeta, FinanceFilterOptions, FinanceSummary } from '../api/types';
 import PageLoader from '../components/PageLoader/PageLoader';
+import SearchableSelect from '../components/SearchableSelect/SearchableSelect';
 
 ChartJS.register(
   CategoryScale,
@@ -264,7 +265,6 @@ const FinancesPage: React.FC = () => {
   );
 
   // Create aliases for backward compatibility with JSX
-  const IRN_OPTIONS = financesOptions.irn;
   const FINANCING_TYPE_OPTIONS = financesOptions.financingType;
   const PRIORITY_OPTIONS = financesOptions.priority;
   const COMPETITION_OPTIONS = financesOptions.competition;
@@ -859,30 +859,6 @@ const FinancesPage: React.FC = () => {
     setSelectedRegionId(event.target.value as RegionId);
   };
 
-  const handleIrnChange = useCallback(
-    (event: React.ChangeEvent<HTMLSelectElement>) => {
-      const irn = event.target.value;
-      setFilters((prev) => ({ ...prev, irn }));
-      if (irn === 'all') {
-        return;
-      }
-
-      // Snap the period to the selected project's years so it isn't filtered out by the default range.
-      financesApi
-        .filtersMeta({ irn })
-        .then((meta) => {
-          if (!meta.minYear || !meta.maxYear) {
-            return;
-          }
-          setFilters((prev) =>
-            prev.irn === irn ? { ...prev, startYear: meta.minYear!, endYear: meta.maxYear! } : prev,
-          );
-        })
-        .catch(() => undefined);
-    },
-    [setFilters],
-  );
-
   const handleFinancingTypeSelect = useCallback(
     (value: FinancingType) => {
       setFilters((prev) => ({ ...prev, financingType: value }));
@@ -902,19 +878,16 @@ const FinancesPage: React.FC = () => {
     setFilters((prev) => ({ ...prev, priority: value }));
   }, []);
 
-  const handleCompetitionChange = useCallback((event: React.ChangeEvent<HTMLSelectElement>) => {
-    const value = event.target.value as CompetitionName;
-    setFilters((prev) => ({ ...prev, competition: value }));
+  const handleCompetitionChange = useCallback((value: string) => {
+    setFilters((prev) => ({ ...prev, competition: value as CompetitionName }));
   }, []);
 
-  const handleApplicantChange = useCallback((event: React.ChangeEvent<HTMLSelectElement>) => {
-    const value = event.target.value as ApplicantType;
-    setFilters((prev) => ({ ...prev, applicant: value }));
+  const handleApplicantChange = useCallback((value: string) => {
+    setFilters((prev) => ({ ...prev, applicant: value as ApplicantType }));
   }, []);
 
-  const handleCustomerChange = useCallback((event: React.ChangeEvent<HTMLSelectElement>) => {
-    const value = event.target.value as CustomerType;
-    setFilters((prev) => ({ ...prev, customer: value }));
+  const handleCustomerChange = useCallback((value: string) => {
+    setFilters((prev) => ({ ...prev, customer: value as CustomerType }));
   }, []);
 
   const handleStatusChange = useCallback((event: React.ChangeEvent<HTMLSelectElement>) => {
@@ -1046,22 +1019,6 @@ const FinancesPage: React.FC = () => {
       </header>
 
       <section className="finances-filter-bar" aria-label={t('finances_filters_aria_label')}>
-        <div className="finances-filter-group">
-          <label htmlFor="filter-irn">{t('finances_filter_irn')}</label>
-          <select
-            id="filter-irn"
-            className="finances-filter-select"
-            value={filters.irn}
-            onChange={handleIrnChange}
-          >
-            {IRN_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
         <div className="finances-filter-group finances-filter-group--range">
           <div className="finances-filter-label">
             <label htmlFor="filter-period">{t('filter_year_range')}</label>
@@ -1131,50 +1088,38 @@ const FinancesPage: React.FC = () => {
 
         <div className="finances-filter-group">
           <label htmlFor="filter-competition">{t('finances_filter_competition')}</label>
-          <select
+          <SearchableSelect
             id="filter-competition"
-            className="finances-filter-select"
             value={filters.competition}
             onChange={handleCompetitionChange}
-          >
-            {COMPETITION_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+            allLabel={COMPETITION_OPTIONS.find((option) => option.value === 'all')?.label ?? ''}
+            placeholder={COMPETITION_OPTIONS.find((option) => option.value === 'all')?.label}
+            options={COMPETITION_OPTIONS.filter((option) => option.value !== 'all')}
+          />
         </div>
 
         <div className="finances-filter-group">
           <label htmlFor="filter-applicant">{t('finances_filter_applicant')}</label>
-          <select
+          <SearchableSelect
             id="filter-applicant"
-            className="finances-filter-select"
             value={filters.applicant}
             onChange={handleApplicantChange}
-          >
-            {APPLICANT_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+            allLabel={APPLICANT_OPTIONS.find((option) => option.value === 'all')?.label ?? ''}
+            placeholder={APPLICANT_OPTIONS.find((option) => option.value === 'all')?.label}
+            options={APPLICANT_OPTIONS.filter((option) => option.value !== 'all')}
+          />
         </div>
 
         <div className="finances-filter-group">
           <label htmlFor="filter-customer">{t('finances_filter_customer')}</label>
-          <select
+          <SearchableSelect
             id="filter-customer"
-            className="finances-filter-select"
             value={filters.customer}
             onChange={handleCustomerChange}
-          >
-            {CUSTOMER_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+            allLabel={CUSTOMER_OPTIONS.find((option) => option.value === 'all')?.label ?? ''}
+            placeholder={CUSTOMER_OPTIONS.find((option) => option.value === 'all')?.label}
+            options={CUSTOMER_OPTIONS.filter((option) => option.value !== 'all')}
+          />
         </div>
 
         <div className="finances-filter-group">
