@@ -113,15 +113,17 @@
 .employees-search input {
     border: none;
     background: transparent;
-    padding: 0.65rem 0;
+    padding: 0.65rem 0.4rem;
     flex: 1;
     font-weight: 600;
+    outline: none;
 }
 
+/* Focus is shown on the whole field (light blue), not as the browser's ring on the input. */
 .employees-search:focus-within {
-    border-color: #2563eb;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-    background: #ffffff;
+    border-color: #93c5fd;
+    box-shadow: 0 0 0 3px rgba(147, 197, 253, 0.35);
+    background: #f0f7ff;
 }
 
 .employees-column-picker {
@@ -604,4 +606,47 @@
         width: 100%;
         min-width: 0;
     }
+}
+/* Gender checkboxes. Selectors are doubled up to override the generic
+   ".employees-filter-item label/input" rules (uppercase labels, select-like inputs). */
+.employees-checkbox-group {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.employees-filter-item .employees-checkbox {
+    flex: 1 1 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.5rem;
+    padding: 0.45rem 0.65rem;
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    border-radius: 8px;
+    background: #f8fafc;
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: normal;
+    color: #0f172a;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.employees-filter-item .employees-checkbox:has(input:checked) {
+    border-color: rgba(37, 99, 235, 0.45);
+    background: #eff6ff;
+}
+
+.employees-filter-item .employees-checkbox input[type="checkbox"] {
+    appearance: auto;
+    width: 1rem;
+    height: 1rem;
+    margin: 0;
+    padding: 0;
+    flex: 0 0 auto;
+    border: none;
+    background: none;
+    accent-color: #2563eb;
+    cursor: pointer;
 }

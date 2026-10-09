@@ -186,8 +186,12 @@ const HomePage: React.FC = () => {
     setSelectedRegionId(nextRegionId);
   };
 
-  const summaryCards = useMemo(
-    () => [
+  // Until the dashboard summary arrives, metrics fall back to the map's demo figures;
+  // show a placeholder instead so those never pass for real data.
+  const pendingValue = dashboardError ? '—' : '…';
+
+  const summaryCards = useMemo(() => {
+    const cards = [
       {
         title: t('card_projects_title'),
         path: '/projects',
@@ -261,9 +265,16 @@ const HomePage: React.FC = () => {
           },
         ],
       },
-    ],
-    [metrics, t],
-  );
+    ];
+    if (dashboardSummary) {
+      return cards;
+    }
+    return cards.map((card) => ({
+      ...card,
+      value: pendingValue,
+      details: card.details.map((detail) => ({ ...detail, value: pendingValue })),
+    }));
+  }, [dashboardSummary, metrics, pendingValue, t]);
 
   const handleRegionChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedRegionId(event.target.value as RegionId);
@@ -281,7 +292,7 @@ const HomePage: React.FC = () => {
     setSelectedOrganization(event.target.value);
   };
 
-  const mapHighlights = [
+  const mapHighlightItems = [
     {
       label: t('projects_page_title'),
       value: formatNumber(metrics.projects.total),
@@ -303,6 +314,9 @@ const HomePage: React.FC = () => {
       path: '/finances',
     },
   ];
+  const mapHighlights = dashboardSummary
+    ? mapHighlightItems
+    : mapHighlightItems.map((item) => ({ ...item, value: pendingValue }));
 
   return (
     <div className="home-page" data-testid="home-page">

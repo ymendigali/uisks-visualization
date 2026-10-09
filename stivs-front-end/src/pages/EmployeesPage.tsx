@@ -277,6 +277,20 @@ const EmployeesPage: React.FC = () => {
     () => new Map((employeeFiltersMeta?.projectRole ?? []).map((item) => [item.value, item.count])),
     [employeeFiltersMeta?.projectRole],
   );
+  // Gender is a pair of checkboxes, both checked by default ("all"); at least one stays checked.
+  const genderOptionsMaleFirst = useMemo(
+    () => [...allGenders].sort((a, b) => Number(/жен|female/i.test(a)) - Number(/жен|female/i.test(b))),
+    [allGenders],
+  );
+  const handleGenderToggle = (option: string) => {
+    setFilters((prev) => {
+      if (prev.gender === 'all') {
+        const remaining = genderOptionsMaleFirst.filter((item) => item !== option);
+        return remaining.length === 1 ? { ...prev, gender: remaining[0] as GenderType } : prev;
+      }
+      return prev.gender === option ? prev : { ...prev, gender: 'all' };
+    });
+  };
   const genderCountByValue = useMemo(
     () => new Map((employeeFiltersMeta?.gender ?? []).map((item) => [item.value, item.count])),
     [employeeFiltersMeta?.gender],
@@ -676,19 +690,24 @@ const EmployeesPage: React.FC = () => {
                   {t('filter_label_gender')}
                   <span className="employees-filter-badge">доступно {employeesAvailableCounts.gender}</span>
                 </label>
-                <select
-                  id="gender-filter"
-                  value={filters.gender}
-                  onChange={(e) => handleFilterChange('gender', e.target.value as GenderType)}
-                >
-                  <option value="all">{t('filter_option_any')}</option>
-                  {allGenders.map((genderOption) => (
-                    <option key={genderOption} value={genderOption}>
-                      {translateGender(genderOption, i18n.language)}
-                      {genderCountByValue.get(genderOption) !== undefined ? ` (${genderCountByValue.get(genderOption)})` : ''}
-                    </option>
-                  ))}
-                </select>
+                <div className="employees-checkbox-group" id="gender-filter" role="group">
+                  {genderOptionsMaleFirst.map((genderOption) => {
+                    const isChecked = filters.gender === 'all' || filters.gender === genderOption;
+                    return (
+                      <label key={genderOption} className="employees-checkbox">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => handleGenderToggle(genderOption)}
+                        />
+                        <span>
+                          {translateGender(genderOption, i18n.language)}
+                          {genderCountByValue.get(genderOption) !== undefined ? ` (${genderCountByValue.get(genderOption)})` : ''}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
 
               <div className="employees-filter-item">
@@ -701,7 +720,7 @@ const EmployeesPage: React.FC = () => {
                   value={filters.affiliateType}
                   onChange={(nextValue) => handleFilterChange('affiliateType', nextValue as AffiliateType)}
                   allLabel={t('filter_option_all')}
-                  placeholder={t('filter_search_placeholder')}
+                  placeholder={t('filter_affiliate_placeholder')}
                   options={allAffiliateTypes.map((affiliateOption) => ({
                     value: affiliateOption,
                     label:
@@ -727,7 +746,7 @@ const EmployeesPage: React.FC = () => {
                   value={filters.citizenship}
                   onChange={(e) => handleFilterChange('citizenship', e.target.value as CitizenshipType)}
                 >
-                  <option value="all">{t('filter_option_any')}</option>
+                  <option value="all">{t('filter_option_not_selected')}</option>
                   {allCitizenships.map((citizenshipOption) => (
                     <option key={citizenshipOption} value={citizenshipOption}>
                       {citizenshipOption === 'resident'
