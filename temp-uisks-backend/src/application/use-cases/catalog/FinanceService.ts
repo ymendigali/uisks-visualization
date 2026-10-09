@@ -71,6 +71,9 @@ const isNoFilterValue = (value?: string): boolean => {
 
 const normalizeRegion = (value: string): string =>
   normalize(value)
+    // "Мангыстауская" and "Мангистауская" are both used for the same region.
+    .replace(/ё/g, "е")
+    .replace(/ы/g, "и")
     .replace(/[.,]/g, " ")
     .replace(/(^|\s)(город|г|область|обл)(\s|$)/g, " ")
     .replace(/\s+/g, " ")
@@ -122,7 +125,9 @@ const matchesRegion = (itemRegion: string, filterRegion?: string): boolean => {
     return false;
   }
 
-  return left.includes(right) || right.includes(left);
+  // Exact match after normalization: a substring match lets "Алматы" also catch
+  // "Алматинская обл." (and folding ы→и makes that overlap worse).
+  return left === right;
 };
 
 const toNumber = (value: unknown): number => {

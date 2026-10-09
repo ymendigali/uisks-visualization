@@ -122,7 +122,37 @@ if (missing.length > 0) {
   console.warn(`Columns not found (left unchanged): ${missing.join(", ")}`);
 }
 
-const cell = (row, key) => (columnHeaders[key] ? toStringValue(row[columnHeaders[key]]) : "");
+// Exports mix Latin look-alikes into Cyrillic words ("Министерствo" with a Latin "o"),
+// which would show up as separate filter options; map them back to Cyrillic.
+const LATIN_TO_CYRILLIC = { a: "а", c: "с", e: "е", o: "о", p: "р", x: "х", y: "у", A: "А", B: "В", C: "С", E: "Е", H: "Н", K: "К", M: "М", O: "О", P: "Р", T: "Т", X: "Х" };
+const fixLookalikes = (value) =>
+  value.replace(/[aceopxyABCEHKMOPTX](?=[а-яё])|(?<=[а-яё])[aceopxyABCEHKMOPTX]/gi, (ch) => LATIN_TO_CYRILLIC[ch] ?? ch);
+
+const rawCell = (row, key) => (columnHeaders[key] ? fixLookalikes(toStringValue(row[columnHeaders[key]])) : "");
+
+// Filterable text columns: spellings that differ only in letter case ("Университет" /
+// "университет") are unified to the most frequent spelling in the file.
+const CANONICAL_KEYS = ["applicant", "customer", "contest", "priority", "financingType"];
+const canonicalSpelling = new Map();
+for (const key of CANONICAL_KEYS) {
+  const counts = new Map();
+  for (const row of rawRows) {
+    const value = rawCell(row, key);
+    if (value) counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+  const best = new Map();
+  for (const [value, count] of counts) {
+    const folded = value.toLowerCase();
+    const current = best.get(folded);
+    if (!current || count > current.count) best.set(folded, { value, count });
+  }
+  canonicalSpelling.set(key, best);
+}
+
+const cell = (row, key) => {
+  const value = rawCell(row, key);
+  return canonicalSpelling.get(key)?.get(value.toLowerCase())?.value ?? value;
+};
 
 const rows = new Map();
 rawRows.forEach((row, index) => {

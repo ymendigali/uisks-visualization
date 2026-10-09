@@ -34,6 +34,9 @@ const contains = (source: string, needle: string): boolean => normalize(source).
 
 const normalizeRegion = (value: string): string =>
   normalize(value)
+    // "Мангыстауская" and "Мангистауская" are both used for the same region.
+    .replace(/ё/g, "е")
+    .replace(/ы/g, "и")
     .replace(/[.,]/g, " ")
     .replace(/(^|\s)(город|г|область|обл|обл\.|обл)(\s|$)/g, " ")
     .replace(/\s+/g, " ")
@@ -46,7 +49,9 @@ const matchesRegion = (itemRegion: string, filterRegion: string): boolean => {
     return false;
   }
 
-  return left.includes(right) || right.includes(left);
+  // Exact match after normalization: a substring match lets "Алматы" also catch
+  // "Алматинская обл." (and folding ы→и makes that overlap worse).
+  return left === right;
 };
 
 const sortUniqueStrings = (values: string[]): string[] => Array.from(new Set(values.filter(Boolean))).sort((a, b) => a.localeCompare(b));
@@ -233,6 +238,43 @@ const MRNTI_KEYS = ["МРНТИ", "MRNTI"];
 const TRL_KEYS = ["TRL", "Уровень TRL"];
 const PERIOD_KEYS = ["Период реализации"];
 
+// MRNTI comes either as a code ("31.25.00") or as a description from older imports
+// ("86-ОХРАНА ТРУДА 01-Общие вопросы ... 86.01.00"); both start with the section code.
+const toMrntiSectionCode = (value: string | undefined): string => toStringValue(value).match(/^(\d{2})[-.]/)?.[1] ?? "";
+
+// Section titles are taken from the descriptions ("86-ОХРАНА ТРУДА") and attached to
+// every project, so code-only rows get the same "86 — Охрана труда" filter option.
+// Sections that only appear as bare codes in project data (titles from the MRNTI classifier).
+const MRNTI_FALLBACK_TITLES: Record<string, string> = {
+  "72": "Внешняя торговля",
+  "77": "Физическая культура и спорт"
+};
+
+const assignMrntiSections = (projects: Project[]): void => {
+  const titleCounts = new Map<string, Map<string, number>>();
+  for (const project of projects) {
+    const match = toStringValue(project.mrnti).match(/^(\d{2})-(.+?)(?=\s+\d{2}-|\s+\d{2}\.\d{2}|$)/);
+    if (!match) continue;
+    const title = match[2].trim().toLowerCase();
+    const counts = titleCounts.get(match[1]) ?? new Map<string, number>();
+    counts.set(title, (counts.get(title) ?? 0) + 1);
+    titleCounts.set(match[1], counts);
+  }
+  const titles = new Map(
+    Array.from(titleCounts.entries()).map(([code, counts]) => {
+      const title = Array.from(counts.entries()).sort((a, b) => b[1] - a[1])[0][0];
+      return [code, `${title.charAt(0).toUpperCase()}${title.slice(1)}`];
+    })
+  );
+  for (const project of projects) {
+    const code = toMrntiSectionCode(project.mrnti);
+    if (code) {
+      const title = titles.get(code) ?? MRNTI_FALLBACK_TITLES[code];
+      project.mrntiSection = title ? `${code} — ${title}` : code;
+    }
+  }
+};
+
 const toQualifiedTable = (value: string): string => {
   const normalized = value.trim();
   if (!normalized) {
@@ -336,7 +378,7 @@ export class PostgresProjectRepository implements ProjectRepository {
       applicant: sortUniqueStrings(projects.map((project) => project.lead)),
       contest: sortUniqueStrings(projects.map((project) => toStringValue(project.contest)).filter(Boolean)),
       customer: sortUniqueStrings(projects.map((project) => toStringValue(project.customer)).filter(Boolean)),
-      mrnti: sortUniqueStrings(projects.map((project) => toStringValue(project.mrnti)).filter(Boolean)),
+      mrnti: sortUniqueStrings(projects.map((project) => toStringValue(project.mrntiSection)).filter(Boolean)),
       trl: sortUniqueStrings(projects.map((project) => toTrlLabel(project.trl)).filter(Boolean))
     };
   }
@@ -361,7 +403,7 @@ export class PostgresProjectRepository implements ProjectRepository {
       applicant: toCountedStrings(projects.map((project) => project.lead)),
       contest: toCountedStrings(projects.map((project) => toStringValue(project.contest)).filter(Boolean)),
       customer: toCountedStrings(projects.map((project) => toStringValue(project.customer)).filter(Boolean)),
-      mrnti: toCountedStrings(projects.map((project) => toStringValue(project.mrnti)).filter(Boolean)),
+      mrnti: toCountedStrings(projects.map((project) => toStringValue(project.mrntiSection)).filter(Boolean)),
       trl: toCountedStrings(projects.map((project) => toTrlLabel(project.trl)).filter(Boolean)),
       yearCounts: countProjectsByYear(
         await this.listAll({ ...filters, startYear: undefined, endYear: undefined })
@@ -505,6 +547,8 @@ export class PostgresProjectRepository implements ProjectRepository {
       };
     });
 
+    assignMrntiSections(base);
+
     return withOverlay(base, this.localProjects, this.deletedProjectIds).filter((project) => {
       const irnFilter = isNoFilterValue(filters.irn) ? undefined : filters.irn;
       const statusFilter = isNoFilterValue(filters.status) ? undefined : filters.status;
@@ -536,20 +580,27 @@ export class PostgresProjectRepository implements ProjectRepository {
           return false;
         }
       }
-      if (priorityFilter && !project.tags.some((tag) => contains(tag, priorityFilter))) {
+      // Options are exact values, so match exactly: a substring match would also pick up
+      // longer priorities like "«Интеллектуальный потенциал страны» по направлению науки …".
+      if (priorityFilter && !isSame(firstNonEmpty([project.priority, project.tags[0]]), priorityFilter)) {
         return false;
       }
-      if (applicantFilter && !contains(project.lead, applicantFilter)) {
+      if (applicantFilter && !isSame(project.lead, applicantFilter)) {
         return false;
       }
-      if (contestFilter && !contains(project.contest ?? "", contestFilter)) {
+      if (contestFilter && !isSame(project.contest ?? "", contestFilter)) {
         return false;
       }
-      if (customerFilter && !contains(project.customer ?? "", customerFilter)) {
+      if (customerFilter && !isSame(project.customer ?? "", customerFilter)) {
         return false;
       }
-      if (mrntiFilter && !contains(project.mrnti ?? "", mrntiFilter)) {
-        return false;
+      if (mrntiFilter) {
+        // Options are sections ("31 — Химия"); match on the section code.
+        const section = mrntiFilter.match(/^\d{2}/)?.[0];
+        const matches = section ? toMrntiSectionCode(project.mrnti) === section : contains(project.mrnti ?? "", mrntiFilter);
+        if (!matches) {
+          return false;
+        }
       }
       if (filters.trl !== undefined && project.trl !== filters.trl) {
         return false;

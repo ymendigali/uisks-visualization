@@ -14,6 +14,8 @@ export interface Project {
   contest?: string;
   customer?: string;
   mrnti?: string;
+  // Top-level MRNTI section for filtering, e.g. "31 — Химия".
+  mrntiSection?: string;
   trl?: number | null;
   startYear?: number | null;
   endYear?: number | null;

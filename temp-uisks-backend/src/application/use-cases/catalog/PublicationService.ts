@@ -74,6 +74,9 @@ const isNoFilterValue = (value?: string): boolean =>
 
 const normalizeRegion = (value: string): string =>
   normalize(value)
+    // "Мангыстауская" and "Мангистауская" are both used for the same region.
+    .replace(/ё/g, "е")
+    .replace(/ы/g, "и")
     .replace(/[.,]/g, " ")
     .replace(/(^|\s)(город|г|область|обл)(?=\s|$)/g, " ")
     .replace(/\s+/g, " ")
